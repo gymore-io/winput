@@ -1,3 +1,5 @@
+use crate::error::WindowsError;
+
 use winapi::shared::windef;
 use winapi::um::winuser;
 
@@ -14,15 +16,15 @@ impl Mouse {
     ///
     /// println!("The mouse is at {:?}", Mouse::position());
     /// ```
-    pub fn position() -> Option<(i32, i32)> {
+    pub fn position() -> Result<(i32, i32), WindowsError> {
         unsafe {
             let mut point: windef::POINT = std::mem::zeroed();
 
             // Calling C code
             if winuser::GetCursorPos(&mut point) != 0 {
-                Some((point.x, point.y))
+                Ok((point.x, point.y))
             } else {
-                None
+                Err(WindowsError::from_last_error())
             }
         }
     }
@@ -54,11 +56,13 @@ impl Mouse {
     /// let input = Input::from_motion(motion);
     /// winput::send_inputs(&[input]);
     /// ```
-    pub fn set_position(x: i32, y: i32) {
+    pub fn set_position(x: i32, y: i32) -> Result<(), WindowsError> {
         unsafe {
             // Calling C code
             if winuser::SetCursorPos(x, y) == 0 {
-                // TODO: Handle the error properly
+                Err(WindowsError::from_last_error())
+            } else {
+                Ok(())
             }
         }
     }

@@ -1,3 +1,6 @@
+mod error;
+pub use error::WindowsError;
+
 mod vk;
 pub use vk::Vk;
 
