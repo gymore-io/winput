@@ -33,7 +33,7 @@ pub type Result<T> = std::result::Result<T, Error>;
 pub(crate) fn get_last_error() -> Error {
     use winapi::um::errhandlingapi::GetLastError;
     use winapi::um::winbase;
-    use winapi::um::winbase::FormatMessageW;
+    use winapi::um::winbase::FormatMessageA;
 
     use std::{mem, ptr};
 
@@ -43,7 +43,7 @@ pub(crate) fn get_last_error() -> Error {
     let code = unsafe { GetLastError() };
 
     let message = unsafe {
-        let mut buffer_ptr: *mut u16 = ptr::null_mut();
+        let mut buffer_ptr: *mut i8 = ptr::null_mut();
 
         // Calling C code
         //
@@ -51,15 +51,15 @@ pub(crate) fn get_last_error() -> Error {
         // `buffer_ptr`.
         //
         // The allocated message is a null-terminated string with characters of 16 bits.
-        let allocated_length = FormatMessageW(
+        let allocated_length = FormatMessageA(
             winbase::FORMAT_MESSAGE_ALLOCATE_BUFFER
                 | winbase::FORMAT_MESSAGE_FROM_SYSTEM
                 | winbase::FORMAT_MESSAGE_IGNORE_INSERTS,
-            ptr::null(),
+            ptr::null(), // unused with `FORMAT_MESSAGE_FROM_SYSTEM`,
             code,
-            0,
-            &mut buffer_ptr as *mut _ as _,
-            0,
+            0, // let the system pick a language
+            &mut buffer_ptr as *mut *mut i8 as *mut i8,
+            0, // minimum size for the allocated buffer
             ptr::null_mut(),
         );
 
@@ -78,9 +78,12 @@ pub(crate) fn get_last_error() -> Error {
             //  * The pointer is alligned
             //
             // The null character is not included in the slice.
-            let slice = std::slice::from_raw_parts_mut(buffer_ptr, allocated_length as _);
+            let slice = std::slice::from_raw_parts_mut(
+                buffer_ptr as *mut u8,
+                allocated_length as _,
+            );
 
-            let message = String::from_utf16_lossy(slice);
+            let message = String::from_utf8_lossy(slice).into_owned();
 
             // The message was copied, we can deallocate it.
             winbase::LocalFree(buffer_ptr as _);
