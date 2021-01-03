@@ -134,11 +134,27 @@ pub fn send_inputs(inputs: impl AsRef<[Input]>) -> Result<u32> {
 /// winput::send_inputs(&inputs).unwrap();
 /// ```
 pub trait Keylike: Copy {
+    /// Produces an `Input` that causes the given action to be taken on `self`.
+    ///
+    /// ## Panics
+    ///
+    /// This function panics if `self` was not a valid key.
+    ///
+    /// ## Example
+    ///
+    /// ```rust
+    /// use winput::{Keylike, Action};
+    ///
+    /// let input = 'A'.produce_input(Action::Press);
+    /// winput::send_inputs(&[input]).unwrap();
+    /// ```
+    fn produce_input(self, action: Action) -> Input;
+
     /// Produces an `Input` that causes `self` to be pressed.
     ///
     /// ## Panics
     ///
-    /// This function panics if `self` was not a valid value key.
+    /// This function panics if `self` was not a valid key.
     ///
     /// ## Example
     ///
@@ -148,13 +164,16 @@ pub trait Keylike: Copy {
     /// let input = 'A'.press();
     /// winput::send_inputs(&[input]);
     /// ```
-    fn press(self) -> Input;
+    #[inline(always)]
+    fn press(self) -> Input {
+        self.produce_input(Action::Press)
+    }
 
     /// Produces an `Input` that causes `self` to be released.
     ///
     /// ## Panics
     ///
-    /// This function panics if `self` was not a valid value.
+    /// This function panics if `self` was not a valid key.
     ///
     /// ## Example
     ///
@@ -164,7 +183,10 @@ pub trait Keylike: Copy {
     /// let input = 'B'.release();
     /// winput::send_inputs(&[input]).unwrap();
     /// ```
-    fn release(self) -> Input;
+    #[inline(always)]
+    fn release(self) -> Input {
+        self.produce_input(Action::Release)
+    }
 
     /// Produces an `[Input; 2]` that causes `self` to be pressed then released.
     ///
