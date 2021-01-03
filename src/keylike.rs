@@ -95,7 +95,7 @@ pub trait Keylike: Copy {
     /// 'C'.trigger().unwrap();
     /// ```
     #[inline(always)]
-    fn trigger(self) -> Result<(), WindowsError> {
+    fn send(self) -> Result<(), WindowsError> {
         let inputs = [
             self.produce_input(Action::Press),
             self.produce_input(Action::Release),
