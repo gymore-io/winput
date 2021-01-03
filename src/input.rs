@@ -2,15 +2,6 @@ use crate::vk::Vk;
 
 use winapi::um::winuser;
 
-/// Represents an action that can be taken on a key or button.
-#[derive(Clone, Copy, PartialEq, Eq, Hash, Debug)]
-pub enum Action {
-    /// The action of pressing the key.
-    Press,
-    /// The action of releasing the key.
-    Release,
-}
-
 /// This structure is used by [`send_inputs`] to store information for synthesizing input
 /// events such as keystrokes, mouse movement, and mouse clicks.
 ///
@@ -283,6 +274,15 @@ pub fn send_inputs(inputs: impl AsRef<[Input]>) -> u32 {
             mem::size_of::<winuser::INPUT>() as _,
         )
     }
+}
+
+/// Represents an action that can be taken on a key or button.
+#[derive(Clone, Copy, PartialEq, Eq, Hash, Debug)]
+pub enum Action {
+    /// The action of pressing the key.
+    Press,
+    /// The action of releasing the key.
+    Release,
 }
 
 /// A mouse button.

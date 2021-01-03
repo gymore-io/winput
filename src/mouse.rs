@@ -1,4 +1,6 @@
 use crate::error::WindowsError;
+
+#[cfg(not(feature = "minimal"))]
 use crate::input::{send_inputs, Input, MouseMotion, WheelDirection};
 
 use winapi::shared::windef;
@@ -59,6 +61,7 @@ impl Mouse {
     ///
     /// Mouse::scroll(1.0).unwrap();
     /// ```
+    #[cfg(not(feature = "minimal"))]
     pub fn scroll(amount: f32) -> Result<(), WindowsError> {
         let input = Input::from_wheel(amount, WheelDirection::Vertical);
         let count = send_inputs(&[input]);
@@ -79,6 +82,7 @@ impl Mouse {
     ///
     /// Mouse::scrollh(1.0).unwrap();
     /// ```
+    #[cfg(not(feature = "minimal"))]
     pub fn scrollh(amount: f32) -> Result<(), WindowsError> {
         let input = Input::from_wheel(amount, WheelDirection::Horizontal);
         let count = send_inputs(&[input]);
@@ -99,6 +103,7 @@ impl Mouse {
     ///
     /// Mouse::move_relative(100, 50).unwrap();
     /// ```
+    #[cfg(not(feature = "minimal"))]
     pub fn move_relative(dx: i32, dy: i32) -> Result<(), WindowsError> {
         let motion = MouseMotion::Relative { dx, dy };
         let input = Input::from_motion(motion);
@@ -121,6 +126,7 @@ impl Mouse {
     /// // Move the mouse in the center of the main monitor.
     /// Mouse::move_absolute(0.5, 0.5).unwrap();
     /// ```
+    #[cfg(not(feature = "minimal"))]
     pub fn move_absolute(x: f32, y: f32) -> Result<(), WindowsError> {
         let motion = MouseMotion::Absolute {
             x,

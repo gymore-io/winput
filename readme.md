@@ -2,7 +2,7 @@
 
 ## Target
 
-This crate aims to be lowlevel and straitforward enough to be used as a backend for other, more general crates of the genre. For this purpose, the "minimal" feature disables most of the stuff that is not really part of *Windows*' input system (things like [`Keylike`], for example).
+This crate aims to be lowlevel and straitforward enough to be used as a backend for other, more general crates of the genre. For this purpose, the "minimal" feature disables most of the stuff that is not really part of *Windows*' input system (things like [`Keylike`], for example, that are mostly there for convenience).
 
 ## Examples
 

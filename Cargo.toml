@@ -5,6 +5,9 @@ authors = ["Gymore <gymore.contact@gmail.com>"]
 edition = "2018"
 description = "A high-level interface to Windows's input system."
 
+[features]
+minimal = []
+
 [dependencies.winapi]
 version = "0.3"
 default-features = false
