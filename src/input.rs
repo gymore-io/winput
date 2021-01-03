@@ -1,4 +1,3 @@
-use crate::error::{Error, Result};
 use crate::vk::Vk;
 
 use winapi::um::winuser;
@@ -21,7 +20,7 @@ pub enum Action {
 /// use winput::{Input, Action};
 ///
 /// let input = Input::from_char('A', Action::Press);
-/// winput::send_inputs(&[input]).unwrap();
+/// winput::send_inputs(&[input]);
 /// ```
 #[derive(Clone)]
 #[repr(transparent)]
@@ -29,8 +28,7 @@ pub struct Input(winuser::INPUT);
 
 impl Input {
     /// Creates an `Input` that causes the given action to be taken on the given
-    /// character. This function fails with `Error::InvalidCharacter`if the given
-    /// character is above `0x0000ffff`.
+    /// character. If the given character is above `0x0000ffff`, `None` is returned.
     ///
     /// ## Example
     ///
@@ -38,12 +36,12 @@ impl Input {
     /// use winput::{Input, Action};
     ///
     /// let input = Input::from_char('A', Action::Press).unwrap();
-    /// winput::send_inputs(&[input]).unwrap();
+    /// winput::send_inputs(&[input]);
     /// ```
-    pub fn from_char(c: char, action: Action) -> Result<Input> {
+    pub fn from_char(c: char, action: Action) -> Option<Input> {
         let c_n = c as u32;
         if c_n > 0x0000ffff {
-            return Err(Error::InvalidCharacter(c));
+            return None;
         }
 
         unsafe {
@@ -58,7 +56,7 @@ impl Input {
             };
             ki.time = 0; // let the system provide a time stamp
 
-            Ok(Self(input))
+            Some(Self(input))
         }
     }
 
@@ -71,7 +69,7 @@ impl Input {
     /// use winput::{Input, Action, Vk};
     ///
     /// let input = Input::from_vk(Vk::Enter, Action::Press);
-    /// winput::send_inputs(&[input]).unwrap();
+    /// winput::send_inputs(&[input]);
     /// ```
     pub fn from_vk(vk: Vk, action: Action) -> Input {
         unsafe {
@@ -99,7 +97,7 @@ impl Input {
     /// use winput::{Button, Action, Input};
     ///
     /// let input = Input::from_button(Button::Left, Action::Press);
-    /// winput::send_inputs(&[input]).unwrap();
+    /// winput::send_inputs(&[input]);
     /// ```
     pub fn from_button(button: Button, action: Action) -> Input {
         unsafe {
@@ -154,7 +152,7 @@ impl Input {
     ///
     /// let input = Input::from_motion(motion);
     ///
-    /// winput::send_inputs(&[input]).unwrap();
+    /// winput::send_inputs(&[input]);
     /// ```
     pub fn from_motion(motion: MouseMotion) -> Self {
         unsafe {
@@ -209,7 +207,7 @@ impl Input {
     /// use winput::{WheelDirection, Input};
     ///
     /// let input = Input::from_wheel(100.0, WheelDirection::Vertical);
-    /// winput::send_inputs(&[input]).unwrap();
+    /// winput::send_inputs(&[input]);
     /// ```
     pub fn from_wheel(motion: f32, direction: WheelDirection) -> Self {
         unsafe {
@@ -242,8 +240,8 @@ impl Input {
 /// This function returns the number of events that were successfully inserted onto the
 /// keyboard or mouse input stream.
 ///
-/// In the case of no events inserted onto the keyboard or mouse input stream, an error is
-/// returned.
+/// If no events were successfully sent, the input stream was already blocked by another
+/// thread.
 ///
 /// ## Example
 ///
@@ -257,24 +255,18 @@ impl Input {
 ///     Input::from_vk(Vk::Shift, Action::Release),
 /// ];
 ///
-/// winput::send_inputs(&inputs).unwrap();
+/// winput::send_inputs(&inputs);
 /// ```
-pub fn send_inputs(inputs: impl AsRef<[Input]>) -> Result<u32> {
+pub fn send_inputs(inputs: impl AsRef<[Input]>) -> u32 {
     use std::mem;
 
+    // Calling C code
     unsafe {
-        // Calling C code
-        let event_count = winuser::SendInput(
+        winuser::SendInput(
             inputs.as_ref().len() as _,
             inputs.as_ref().as_ptr() as _,
             mem::size_of::<winuser::INPUT>() as _,
-        );
-
-        if event_count == 0 {
-            Err(crate::error::get_last_error())
-        } else {
-            Ok(event_count)
-        }
+        )
     }
 }
 
@@ -352,7 +344,7 @@ pub enum WheelDirection {
 ///     Vk::Control.release(),
 /// ];
 ///
-/// winput::send_inputs(&inputs).unwrap();
+/// winput::send_inputs(&inputs);
 /// ```
 pub trait Keylike: Copy {
     /// Produces an `Input` that causes the given action to be taken on `self`.
@@ -367,7 +359,7 @@ pub trait Keylike: Copy {
     /// use winput::{Keylike, Action};
     ///
     /// let input = 'A'.produce_input(Action::Press);
-    /// winput::send_inputs(&[input]).unwrap();
+    /// winput::send_inputs(&[input]);
     /// ```
     fn produce_input(self, action: Action) -> Input;
 
@@ -402,7 +394,7 @@ pub trait Keylike: Copy {
     /// use winput::Keylike;
     ///
     /// let input = 'B'.release();
-    /// winput::send_inputs(&[input]).unwrap();
+    /// winput::send_inputs(&[input]);
     /// ```
     #[inline(always)]
     fn release(self) -> Input {
@@ -421,7 +413,7 @@ pub trait Keylike: Copy {
     /// use winput::Keylike;
     ///
     /// let input = 'C'.trigger();
-    /// winput::send_inputs(&input).unwrap();
+    /// winput::send_inputs(&input);
     /// ```
     #[inline(always)]
     fn trigger(self) -> [Input; 2] {
@@ -467,9 +459,9 @@ impl Keylike for Button {
 ///
 /// let keys = vec![ Vk::A, Vk::B, Vk::C ];
 ///
-/// winput::send_keys(keys).unwrap();
+/// winput::send_keys(keys);
 /// ```
-pub fn send_keys<I>(keys: I) -> Result<u32>
+pub fn send_keys<I>(keys: I) -> u32
 where
     I: IntoIterator,
     I::Item: Keylike,
@@ -498,9 +490,9 @@ where
 /// ## Example
 ///
 /// ```rust, ignore
-/// winput::send_str("Hello, world").unwrap();
+/// winput::send_str("Hello, world");
 /// ```
 #[inline(always)]
-pub fn send_str(s: &str) -> Result<u32> {
+pub fn send_str(s: &str) -> u32 {
     send_keys(s.chars())
 }
