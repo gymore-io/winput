@@ -667,6 +667,7 @@ impl Vk {
     ///
     /// This function is safe as long as the given number `n` is a valid Virtual-Key Code.
     /// Providing a invalid number is *undefined behaviour*.
+    #[inline(always)]
     pub unsafe fn from_u8(n: u8) -> Self {
         // SAFETY: The caller must ensure that the given `u8` represents a valid
         // Virtual-Key Code.
