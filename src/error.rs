@@ -8,7 +8,7 @@ pub struct WindowsError {
 }
 
 impl WindowsError {
-    /// Creates a new `WindowsError` using the last error code retreived using the
+    /// Creates a new [`WindowsError`] using the last error code retreived using the
     /// native `GetLastError` function.
     ///
     /// ## Example
@@ -19,6 +19,8 @@ impl WindowsError {
     /// let error = WindowsError::from_last_error();
     /// println!("{:?}", &error.description);
     /// ```
+    ///
+    /// [`WindowsError`]: struct.WindowsError.html
     pub fn from_last_error() -> Self {
         use winapi::um::errhandlingapi::GetLastError;
 
@@ -26,7 +28,7 @@ impl WindowsError {
         Self::from_error_code(last_error_code)
     }
 
-    /// Creates a new `WindowsError` using the given error code. The description of the
+    /// Creates a new [`WindowsError`] using the given error code. The description of the
     /// error is retreived using the native `FormatMessageW` function.
     ///
     /// ## Example
@@ -37,6 +39,8 @@ impl WindowsError {
     /// let error = WindowsError::from_error_code(101);
     /// println!("{:?}", &error.description);
     /// ```
+    ///
+    /// [`WindowsError`]: struct.WindowsError.html
     pub fn from_error_code(error_code: u32) -> Self {
         use std::{mem, ptr, slice};
         use winapi::um::winbase;

@@ -11,7 +11,7 @@ pub enum Action {
     Release,
 }
 
-/// This structure is used by `send_input` to store information for synthesizing input
+/// This structure is used by [`send_inputs`] to store information for synthesizing input
 /// events such as keystrokes, mouse movement, and mouse clicks.
 ///
 /// ## Example
@@ -22,12 +22,14 @@ pub enum Action {
 /// let input = Input::from_char('A', Action::Press);
 /// winput::send_inputs(&[input]);
 /// ```
+///
+/// [`send_inputs`]: fn.send_inputs.html
 #[derive(Clone)]
 #[repr(transparent)]
 pub struct Input(winuser::INPUT);
 
 impl Input {
-    /// Creates an `Input` that causes the given action to be taken on the given
+    /// Creates an [`Input`] that causes the given action to be taken on the given
     /// character. If the given character is above `0x0000ffff`, `None` is returned.
     ///
     /// ## Example
@@ -38,6 +40,8 @@ impl Input {
     /// let input = Input::from_char('A', Action::Press).unwrap();
     /// winput::send_inputs(&[input]);
     /// ```
+    ///
+    /// [`Input`]: struct.Input.html
     pub fn from_char(c: char, action: Action) -> Option<Input> {
         let c_n = c as u32;
         if c_n > 0x0000ffff {
@@ -60,7 +64,7 @@ impl Input {
         }
     }
 
-    /// Creates an `Input` that causes the given action to be taken on the given
+    /// Creates an [`Input`] that causes the given action to be taken on the given
     /// Virtual-Key Code.
     ///
     /// ## Example
@@ -71,6 +75,8 @@ impl Input {
     /// let input = Input::from_vk(Vk::Enter, Action::Press);
     /// winput::send_inputs(&[input]);
     /// ```
+    ///
+    /// [`Input`]: struct.Input.html
     pub fn from_vk(vk: Vk, action: Action) -> Input {
         unsafe {
             let mut input: winuser::INPUT = std::mem::zeroed();
@@ -88,7 +94,7 @@ impl Input {
         }
     }
 
-    /// Creates an `Input` that causes the given action to be taken on the given mouse
+    /// Creates an [`Input`] that causes the given action to be taken on the given mouse
     /// button.
     ///
     /// ## Example
@@ -99,6 +105,8 @@ impl Input {
     /// let input = Input::from_button(Button::Left, Action::Press);
     /// winput::send_inputs(&[input]);
     /// ```
+    ///
+    /// [`Input`]: struct.Input.html
     pub fn from_button(button: Button, action: Action) -> Input {
         unsafe {
             let mut input: winuser::INPUT = std::mem::zeroed();
@@ -137,8 +145,8 @@ impl Input {
         }
     }
 
-    /// Creates an `Input` that causes the mouse to move according to the given
-    /// `MouseMotion`.
+    /// Creates an [`Input`] that causes the mouse to move according to the given
+    /// [`MouseMotion`].
     ///
     /// ## Example
     ///
@@ -154,6 +162,9 @@ impl Input {
     ///
     /// winput::send_inputs(&[input]);
     /// ```
+    ///
+    /// [`Input`]: struct.Input.html
+    /// [`MouseMotion`]: enum.MouseMotion.html
     pub fn from_motion(motion: MouseMotion) -> Self {
         unsafe {
             let mut input: winuser::INPUT = std::mem::zeroed();
@@ -191,8 +202,8 @@ impl Input {
         }
     }
 
-    /// Creates an `Input` that causes the mouse wheel to rotate by the given amount and
-    /// in the given direction.
+    /// Creates an [`Input`] that causes the mouse wheel to rotate by the given amount and
+    /// in the given [`WheelDirection`].
     ///
     /// When the given direction is vertical, a positive motion means the wheel rotates
     /// forward, away from the user; a negative value means the wheel rotates backward,
@@ -209,6 +220,9 @@ impl Input {
     /// let input = Input::from_wheel(100.0, WheelDirection::Vertical);
     /// winput::send_inputs(&[input]);
     /// ```
+    ///
+    /// [`Input`]: struct.Input.html
+    /// [`WheelDirection`]: enum.WheelDirection.html
     pub fn from_wheel(motion: f32, direction: WheelDirection) -> Self {
         unsafe {
             let mut input: winuser::INPUT = std::mem::zeroed();

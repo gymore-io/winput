@@ -2,7 +2,7 @@ use crate::error::WindowsError;
 use crate::input::{send_inputs, Action, Button, Input};
 use crate::vk::Vk;
 
-/// A trait for objects that can be used as keys. For example a `Vk` and a `char` can be
+/// A trait for objects that can be used as keys. For example a [`Vk`] or a `char` can be
 /// used as a key.
 ///
 /// ## Example
@@ -14,6 +14,8 @@ use crate::vk::Vk;
 /// Vk::A.trigger().unwrap();
 /// Vk::Control.release().unwrap();
 /// ```
+///
+/// [`Vk`]: enum.Vk.html
 pub trait Keylike: Copy {
     /// Produces an `Input` that causes the given action to be taken on `self`.
     ///
@@ -135,8 +137,10 @@ impl Keylike for Button {
     }
 }
 
-/// Synthesizes keystrokes according to the given iterator of keys. Note that this
-/// function needs to allocate a buffer to store the inputs produced by the given keys.
+/// Synthesizes keystrokes according to the given iterator of keys.
+///
+/// Note that this function needs to allocate a buffer to store the inputs produced by the
+/// given keys.
 ///
 /// The function returns the number of inputs that were successfully inserted into the
 /// keyboard input stream.
@@ -175,8 +179,10 @@ where
     send_inputs(&buffer)
 }
 
-/// Synthesizes keystrokes following the given string reference. Note that this function
-/// needs to allocate a buffer to store the inputs produced by the characters.
+/// Synthesizes keystrokes following the given string reference.
+///
+/// Note that this function needs to allocate a buffer to store the inputs produced by
+/// the characters.
 ///
 /// The function returns the number of inputs that were successfully inserted into the
 /// keyboard input stream.

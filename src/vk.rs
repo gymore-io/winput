@@ -619,7 +619,7 @@ pub enum Vk {
     Pa1 = 0xfd,
     /// Clear key
     ///
-    /// `VK_OEM_CLEAR` = 0xfe
+    /// **VK_OEM_CLEAR** = 0xfe
     OemClear = 0xfe,
 }
 
