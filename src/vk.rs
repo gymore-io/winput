@@ -641,6 +641,11 @@ from_vk_for_num!(u8 u16 u32 u64 u128 i8 i16 i32 i64 i128);
 impl Vk {
     /// Creates a Virtual-Key Code from the given `u8`.
     ///
+    /// ## Safety
+    ///
+    /// This function is safe as long as the given number `n` is a valid Virtual-Key Code.
+    /// Providing a invalid number is *undefined behaviour*.
+    ///
     /// ## Example
     ///
     /// ```rust
@@ -662,15 +667,33 @@ impl Vk {
     /// let vk = unsafe { Vk::from_u8(n) };
     /// assert_eq!(vk, Vk::Escape);
     /// ```
-    ///
-    /// ## Safety
-    ///
-    /// This function is safe as long as the given number `n` is a valid Virtual-Key Code.
-    /// Providing a invalid number is *undefined behaviour*.
     #[inline(always)]
     pub unsafe fn from_u8(n: u8) -> Self {
         // SAFETY: The caller must ensure that the given `u8` represents a valid
         // Virtual-Key Code.
         std::mem::transmute(n)
+    }
+
+    /// Checks if this Virtual-Key Code is currently being pressed.
+    ///
+    /// ## Example
+    ///
+    /// ```rust, ignore
+    /// use winput::Vk;
+    ///
+    /// if Vk::Z..is_down() {
+    ///     println!("The Z key is down!");
+    /// } else {
+    ///     println!("The Z key is not down :(");
+    /// }
+    /// ```
+    pub fn is_down(self) -> bool {
+        use winapi::um::winuser::GetAsyncKeyState;
+
+        const MASK: u16 = 0x8000;
+
+        // Calling C code
+        let state = unsafe { GetAsyncKeyState(self.into()) } as u16;
+        state & MASK == MASK
     }
 }
