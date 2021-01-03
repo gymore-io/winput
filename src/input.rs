@@ -1,12 +1,86 @@
-use crate::error::Result;
+use crate::error::{Error, Result};
+use crate::vk::Vk;
 
 use winapi::um::winuser;
+
+/// Represents an action that can be taken on a key or button.
+#[derive(Clone, Copy, PartialEq, Eq, Hash, Debug)]
+pub enum Action {
+    /// The action of pressing the key.
+    Press,
+    /// The action of releasing the key.
+    Release,
+}
 
 /// This structure is used by `send_input` to store information for synthesizing input
 /// events such as keystrokes, mouse movement, and mouse clicks.
 #[derive(Clone)]
 #[repr(transparent)]
 pub struct Input(winuser::INPUT);
+
+impl Input {
+    /// Creates an `Input` that causes the given action to be taken on the given
+    /// character. This function fails with `Error::InvalidCharacter`if the given
+    /// character is above `0x0000ffff`.
+    ///
+    /// ## Example
+    ///
+    /// ```rust
+    /// use winput::{Input, Action};
+    ///
+    /// let input = Input::from_char('A', Action::Press).unwrap();
+    /// winput::send_inputs(&[input]).unwrap();
+    /// ```
+    pub fn from_char(c: char, action: Action) -> Result<Input> {
+        let c_n = c as u32;
+        if c_n > 0x0000ffff {
+            return Err(Error::InvalidCharacter(c));
+        }
+
+        unsafe {
+            let mut input: winuser::INPUT = std::mem::zeroed();
+            input.type_ = winuser::INPUT_KEYBOARD;
+            let ki = input.u.ki_mut();
+            ki.wVk = 0; // ùust be 0 for a unicode event
+            ki.wScan = c as u16;
+            ki.dwFlags = match action {
+                Action::Release => winuser::KEYEVENTF_KEYUP | winuser::KEYEVENTF_UNICODE,
+                Action::Press => winuser::KEYEVENTF_UNICODE,
+            };
+            ki.time = 0; // let the system provide a time stamp
+
+            Ok(Self(input))
+        }
+    }
+
+    /// Creates an `Input` that causes the given action to be taken on the given
+    /// Virtual-Key Code.
+    ///
+    /// ## Example
+    ///
+    /// ```rust
+    /// use winput::{Input, Action, Vk};
+    ///
+    /// let input = Input::from_vk(Vk::Enter, Action::Press);
+    /// winput::send_inputs(&[input]).unwrap();
+    /// ```
+    pub fn from_vk(vk: Vk, action: Action) -> Input {
+        unsafe {
+            let mut input: winuser::INPUT = std::mem::zeroed();
+            input.type_ = winuser::INPUT_KEYBOARD;
+            let ki = input.u.ki_mut();
+            ki.wVk = vk as u16;
+            ki.wScan = 0; // we are using the Virtual-Key Code
+            ki.dwFlags = match action {
+                Action::Release => winuser::KEYEVENTF_KEYUP,
+                Action::Press => 0,
+            };
+            ki.time = 0; // let the system provide a time stamp
+
+            Self(input)
+        }
+    }
+}
 
 /// Synthesizes keystrokes, mouse motions, and button clicks.
 ///

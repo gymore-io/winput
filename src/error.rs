@@ -10,12 +10,18 @@ pub enum Error {
         /// A message associated to the error code.
         message: String,
     },
+
+    /// An `Input` could not be produced from a character.
+    InvalidCharacter(char),
 }
 
 impl fmt::Display for Error {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
             Self::OsError { code, message } => write!(f, "code: {}: {}", code, message),
+            Self::InvalidCharacter(c) => {
+                write!(f, "{:?} cannot be turned into an `Input`", c)
+            }
         }
     }
 }
