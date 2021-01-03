@@ -681,7 +681,7 @@ impl Vk {
     /// ```rust, ignore
     /// use winput::Vk;
     ///
-    /// if Vk::Z..is_down() {
+    /// if Vk::Z.is_down() {
     ///     println!("The Z key is down!");
     /// } else {
     ///     println!("The Z key is not down :(");

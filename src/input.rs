@@ -48,7 +48,7 @@ impl Input {
             let mut input: winuser::INPUT = std::mem::zeroed();
             input.type_ = winuser::INPUT_KEYBOARD;
             let ki = input.u.ki_mut();
-            ki.wVk = 0; // ùust be 0 for a unicode event
+            ki.wVk = 0; // must be 0 for a unicode event
             ki.wScan = c as u16;
             ki.dwFlags = match action {
                 Action::Release => winuser::KEYEVENTF_KEYUP | winuser::KEYEVENTF_UNICODE,

@@ -90,7 +90,7 @@ impl Mouse {
         }
     }
 
-    /// Moves the mouse relativly to its current position, in screen coordinates.
+    /// Moves the mouse relatively to its current position, in screen coordinates.
     ///
     /// ## Example
     ///

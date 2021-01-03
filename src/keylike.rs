@@ -2,8 +2,8 @@ use crate::error::WindowsError;
 use crate::input::{send_inputs, Action, Button, Input};
 use crate::vk::Vk;
 
-/// A trait for objects that can be used as keys. For example `Vk` and `char` can be used
-/// as keys.
+/// A trait for objects that can be used as keys. For example a `Vk` and a `char` can be
+/// used as a key.
 ///
 /// ## Example
 ///
@@ -19,7 +19,8 @@ pub trait Keylike: Copy {
     ///
     /// ## Panics
     ///
-    /// This function panics if `self` was not a valid key.
+    /// This function panics if `self` was not a valid key. For example, any `char` that
+    /// is above `0x0000ffff` cannot be turned into an `Input`.
     ///
     /// ## Example
     ///
@@ -35,7 +36,8 @@ pub trait Keylike: Copy {
     ///
     /// ## Panics
     ///
-    /// This function panics if `self` was not a valid key.
+    /// This function panics if `self` was not a valid key. For example, any `char` that
+    /// is above `0x0000ffff` cannot be turned into an `Input`.
     ///
     /// ## Example
     ///
@@ -60,7 +62,8 @@ pub trait Keylike: Copy {
     ///
     /// ## Panics
     ///
-    /// This function panics if `self` was not a valid key.
+    /// This function panics if `self` was not a valid key. For example, any `char` that
+    /// is above `0x0000ffff` cannot be turned into an `Input`.
     ///
     /// ## Example
     ///
@@ -85,7 +88,8 @@ pub trait Keylike: Copy {
     ///
     /// ## Panics
     ///
-    /// This function panics if `self` was not a valid value.
+    /// This function panics if `self` was not a valid value. For example, any `char` that
+    /// is above `0x0000ffff` cannot be turned into an `Input`.
     ///
     /// ## Example
     ///
@@ -103,10 +107,10 @@ pub trait Keylike: Copy {
 
         let count = crate::input::send_inputs(&inputs);
 
-        if count == 1 {
-            Ok(())
-        } else {
+        if count == 0 {
             Err(WindowsError::from_last_error())
+        } else {
+            Ok(())
         }
     }
 }
@@ -136,6 +140,10 @@ impl Keylike for Button {
 ///
 /// The function returns the number of inputs that were successfully inserted into the
 /// keyboard input stream.
+///
+/// If no events were successfully sent, the input stream was already blocked by another
+/// thread. You can use `winput::WindowsError::from_last_error` to retreive additional
+/// information about this function failing to send events.
 ///
 /// ## Panics
 ///
@@ -172,6 +180,10 @@ where
 ///
 /// The function returns the number of inputs that were successfully inserted into the
 /// keyboard input stream.
+///
+/// If no events were successfully sent, the input stream was already blocked by another
+/// thread. You can use `winput::WindowsError::from_last_error` to retreive additional
+/// information about this function failing to send events.
 ///
 /// ## Panics
 ///
