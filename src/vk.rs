@@ -637,3 +637,39 @@ macro_rules! from_vk_for_num {
 }
 
 from_vk_for_num!(u8 u16 u32 u64 u128 i8 i16 i32 i64 i128);
+
+impl Vk {
+    /// Creates a Virtual-Key Code from the given `u8`.
+    ///
+    /// ## Example
+    ///
+    /// ```rust
+    /// use winput::Vk;
+    ///
+    /// // SAFETY: `0x0d` is a valid Virtual-Key Code.
+    /// let vk = unsafe { Vk::from_u8(0x0d) };
+    /// assert_eq!(vk, Vk::Enter);
+    /// ```
+    ///
+    /// A safe way to use this function is to convert a Virtual-Key Code into a number.
+    ///
+    /// ```rust
+    /// use winput::Vk;
+    ///
+    /// let n = Vk::Escape.into();
+    ///
+    /// // SAFETY: `n` is a valid Virtual-Key Code.
+    /// let vk = unsafe { Vk::from_u8(n) };
+    /// assert_eq!(vk, Vk::Escape);
+    /// ```
+    ///
+    /// ## Safety
+    ///
+    /// This function is safe as long as the given number `n` is a valid Virtual-Key Code.
+    /// Providing a invalid number is *undefined behaviour*.
+    pub unsafe fn from_u8(n: u8) -> Self {
+        // SAFETY: The caller must ensure that the given `u8` represents a valid
+        // Virtual-Key Code.
+        std::mem::transmute(n)
+    }
+}
