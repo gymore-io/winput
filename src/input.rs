@@ -245,3 +245,59 @@ impl Keylike for Vk {
         Input::from_vk(self, action)
     }
 }
+
+/// Synthesizes keystrokes according to the given iterator of keys. Note that this
+/// function needs to allocate a buffer to store the inputs produced by the given keys.
+///
+/// The function returns the number of inputs that were successfully inserted into the
+/// keyboard input stream.
+///
+/// ## Panics
+///
+/// This function panics if the buffer used to store the produced inputs fails to
+/// allocate or if any of the given keys is unable to produce an `Input`.
+///
+/// ## Example
+///
+/// ```rust, ignore
+/// use winput::Vk;
+///
+/// let keys = vec![ Vk::A, Vk::B, Vk::C ];
+///
+/// winput::send_keys(keys).unwrap();
+/// ```
+pub fn send_keys<I>(keys: I) -> Result<u32>
+where
+    I: IntoIterator,
+    I::Item: Keylike,
+{
+    let iter = keys.into_iter();
+    let mut buffer = Vec::with_capacity(iter.size_hint().0 * 2);
+
+    for key in iter {
+        buffer.extend_from_slice(&key.trigger());
+    }
+
+    send_inputs(&buffer)
+}
+
+/// Synthesizes keystrokes following the given string reference. Note that this function
+/// needs to allocate a buffer to store the inputs produced by the characters.
+///
+/// The function returns the number of inputs that were successfully inserted into the
+/// keyboard input stream.
+///
+/// ## Panics
+///
+/// This function panics if the buffer fails to allocate or if any of the given character
+/// fails to produce an `Input`.
+///
+/// ## Example
+///
+/// ```rust, ignore
+/// winput::send_str("Hello, world").unwrap();
+/// ```
+#[inline(always)]
+pub fn send_str(s: &str) -> Result<u32> {
+    send_keys(s.chars())
+}
