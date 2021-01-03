@@ -1,0 +1,11 @@
+[package]
+name = "winput"
+version = "0.1.0"
+authors = ["Gymore <gymore.contact@gmail.com>"]
+edition = "2018"
+description = "A high-level interface to Windows's input system."
+
+[dependencies.winapi]
+version = "0.3"
+default-features = false
+features = ["winuser", "errhandlingapi"]
