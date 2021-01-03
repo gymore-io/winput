@@ -115,20 +115,20 @@ pub fn send_inputs(inputs: impl AsRef<[Input]>) -> Result<u32> {
 ///
 /// ## Example
 ///
-/// ```rust
+/// ```rust, ignore
 /// use winput::{Vk, Keylike};
 ///
 /// let inputs = [
-///     Vk::Control::press(),
-///     Vk::A::press(),
+///     Vk::Control.press(),
+///     Vk::A.press(),
 ///     'l'.press(),
 ///     'l'.release(),
 ///     'o'.press(),
 ///     'o'.release(),
 ///     'l'.press(),
 ///     'l'.release(),
-///     Vk::A::release(),
-///     Vk::Control::release(),
+///     Vk::A.release(),
+///     Vk::Control.release(),
 /// ];
 ///
 /// winput::send_inputs(&inputs).unwrap();
@@ -142,7 +142,7 @@ pub trait Keylike: Copy {
     ///
     /// ## Example
     ///
-    /// ```rust
+    /// ```rust, ignore
     /// use winput::{Keylike, Action};
     ///
     /// let input = 'A'.produce_input(Action::Press);
@@ -158,7 +158,7 @@ pub trait Keylike: Copy {
     ///
     /// ## Example
     ///
-    /// ```rust
+    /// ```rust, ignore
     /// use winput::Keylike;
     ///
     /// let input = 'A'.press();
@@ -177,7 +177,7 @@ pub trait Keylike: Copy {
     ///
     /// ## Example
     ///
-    /// ```rust
+    /// ```rust, ignore
     /// use winput::Keylike;
     ///
     /// let input = 'B'.release();
@@ -196,7 +196,7 @@ pub trait Keylike: Copy {
     ///
     /// ## Example
     ///
-    /// ```rust
+    /// ```rust, ignore
     /// use winput::Keylike;
     ///
     /// let input = 'C'.trigger();
@@ -205,5 +205,19 @@ pub trait Keylike: Copy {
     #[inline(always)]
     fn trigger(self) -> [Input; 2] {
         [self.press(), self.release()]
+    }
+}
+
+impl Keylike for char {
+    #[inline(always)]
+    fn produce_input(self, action: Action) -> Input {
+        Input::from_char(self, action).expect("Invalid character")
+    }
+}
+
+impl Keylike for Vk {
+    #[inline(always)]
+    fn produce_input(self, action: Action) -> Input {
+        Input::from_vk(self, action)
     }
 }
