@@ -34,7 +34,7 @@ impl Input {
     ///
     /// ## Example
     ///
-    /// ```rust
+    /// ```rust, ignore
     /// use winput::{Input, Action};
     ///
     /// let input = Input::from_char('A', Action::Press).unwrap();
@@ -67,7 +67,7 @@ impl Input {
     ///
     /// ## Example
     ///
-    /// ```rust
+    /// ```rust, ignore
     /// use winput::{Input, Action, Vk};
     ///
     /// let input = Input::from_vk(Vk::Enter, Action::Press);
@@ -85,6 +85,54 @@ impl Input {
                 Action::Press => 0,
             };
             ki.time = 0; // let the system provide a time stamp
+
+            Self(input)
+        }
+    }
+
+    /// Creates an `Input` that causes the given action to be taken on the given mouse
+    /// button.
+    ///
+    /// ## Example
+    ///
+    /// ```rust, ignore
+    /// use winput::{Button, Action, Input};
+    ///
+    /// let input = Input::from_button(Button::Left, Action::Press);
+    /// winput::send_inputs(&[input]).unwrap();
+    /// ```
+    pub fn from_button(button: Button, action: Action) -> Input {
+        unsafe {
+            let mut input: winuser::INPUT = std::mem::zeroed();
+            input.type_ = winuser::INPUT_MOUSE;
+            let mi = input.u.mi_mut();
+            mi.dx = 0; // the mouse is not going to move
+            mi.dy = 0;
+            mi.mouseData = match button {
+                Button::X1 => 1,
+                Button::X2 => 2,
+                _ => 0,
+            };
+            mi.dwFlags = match button {
+                Button::Left => match action {
+                    Action::Press => winuser::MOUSEEVENTF_LEFTDOWN,
+                    Action::Release => winuser::MOUSEEVENTF_LEFTUP,
+                },
+                Button::Right => match action {
+                    Action::Press => winuser::MOUSEEVENTF_RIGHTDOWN,
+                    Action::Release => winuser::MOUSEEVENTF_RIGHTUP,
+                },
+                Button::Middle => match action {
+                    Action::Press => winuser::MOUSEEVENTF_MIDDLEDOWN,
+                    Action::Release => winuser::MOUSEEVENTF_MIDDLEUP,
+                },
+                Button::X1 | Button::X2 => match action {
+                    Action::Press => winuser::MOUSEEVENTF_XDOWN,
+                    Action::Release => winuser::MOUSEEVENTF_XUP,
+                },
+            };
+            mi.time = 0; // let the system provide a time stamp
+            mi.dwExtraInfo = 0; // no extra information
 
             Self(input)
         }
@@ -132,6 +180,21 @@ pub fn send_inputs(inputs: impl AsRef<[Input]>) -> Result<u32> {
             Ok(event_count)
         }
     }
+}
+
+/// A mouse button.
+#[derive(Clone, Copy, PartialEq, Eq, Hash, Debug)]
+pub enum Button {
+    /// The left mouse button.
+    Left,
+    /// The right mouse button.
+    Right,
+    /// The middle mouse button.
+    Middle,
+    /// The X1 mouse button.
+    X1,
+    /// The X2 mouse button.
+    X2,
 }
 
 /// A trait for objects that can be used as keys. For example `Vk` and `char` can be used
@@ -243,6 +306,12 @@ impl Keylike for Vk {
     #[inline(always)]
     fn produce_input(self, action: Action) -> Input {
         Input::from_vk(self, action)
+    }
+}
+
+impl Keylike for Button {
+    fn produce_input(self, action: Action) -> Input {
+        Input::from_button(self, action)
     }
 }
 
