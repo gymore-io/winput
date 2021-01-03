@@ -31,7 +31,7 @@ pub(crate) fn get_last_error() -> Error {
 
     use std::{mem, ptr};
 
-    // Called from C code.
+    // Calling C code
     //
     // This function returns the calling thread's last error code.
     let code = unsafe { GetLastError() };
@@ -39,7 +39,7 @@ pub(crate) fn get_last_error() -> Error {
     let message = unsafe {
         let mut buffer_ptr: *mut u16 = ptr::null_mut();
 
-        // Called from C code.
+        // Calling C code
         //
         // This function will allocate a string at write a pointer to that string into
         // `buffer_ptr`.
