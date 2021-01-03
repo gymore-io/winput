@@ -1,6 +1,6 @@
 use std::fmt;
 
-/// Represents an Windows error.
+/// Represents a Windows error.
 #[derive(Clone, Debug)]
 pub struct WindowsError {
     code: u32,

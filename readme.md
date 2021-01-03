@@ -1,8 +1,12 @@
-`winput` is a high-level interface to *Windows*'s input system.
+`winput` is a high-level interface to *Windows*' input system.
+
+## Target
+
+This crate aims to be lowlevel and straitforward enough to be used as a backend for other, more general crates of the genre. For this purpose, the "minimal" feature disables most of the stuff that is not really part of *Windows*' input system (things like [`Keylike`], for example).
 
 ## Examples
 
-The `Keylike` structure allows you to synthesize keystrokes on objects that can be used as keys.
+The [`Keylike`] structure allows you to synthesize keystrokes on objects that can be used as keys.
 
 ```rust
 use winput::{Keylike, Vk, Button};
@@ -24,7 +28,7 @@ Button::Left.send().unwrap();
 winput::send_str("Hello, world!");
 ```
 
-The `Mouse` structure can be used to manipulate the mouse.
+The [`Mouse`] structure can be used to manipulate the mouse.
 
 ```rust
 use winput::Mouse;
@@ -46,7 +50,7 @@ Mouse::scroll(1.5).unwrap();
 Mouse::scrollh(-1.5).unwrap();
 ```
 
-For more complicated input patterns, the `Input` structure can be used.
+For more complicated input patterns, the [`Input`] structure can be used.
 
 ```rust
 use winput::{Input, Vk, Action, MouseMotion};
@@ -68,3 +72,7 @@ let number_of_inputs_inserted = winput::send_inputs(&inputs);
 assert_eq!(number_of_inputs_inserted, 3);
 // hopefully!
 ```
+
+[`Keylike`]: https://docs.rs/winput/latest/winput/trait.Keylike.html
+[`Input`]: https://docs.rs/winput/latest/winput/struct.Input.html
+[`Mouse`]: https://docs.rs/winput/latest/winput/struct.Mouse.html
