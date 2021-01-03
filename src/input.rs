@@ -131,6 +131,102 @@ impl Input {
                     Action::Release => winuser::MOUSEEVENTF_XUP,
                 },
             };
+
+            mi.time = 0; // let the system provide a time stamp
+            mi.dwExtraInfo = 0; // no extra information
+
+            Self(input)
+        }
+    }
+
+    /// Creates an `Input` that causes the mouse to move according to the given
+    /// `MouseMotion`.
+    ///
+    /// ## Example
+    ///
+    /// ```rust, ignore
+    /// use winput::{MouseMotion, Input};
+    ///
+    /// let motion = MouseMotion::Relative {
+    ///     dx: 100, // 100 pixels right
+    ///     dy: 50, // 50 pixels down
+    /// };
+    ///
+    /// let input = Input::from_motion(motion);
+    ///
+    /// winput::send_inputs(&[input]).unwrap();
+    /// ```
+    pub fn from_motion(motion: MouseMotion) -> Self {
+        unsafe {
+            let mut input: winuser::INPUT = std::mem::zeroed();
+            input.type_ = winuser::INPUT_MOUSE;
+            let mi = input.u.mi_mut();
+
+            mi.mouseData = 0; // no additional data
+
+            // in any case, the mouse is goign to move
+            mi.dwFlags = winuser::MOUSEEVENTF_MOVE;
+
+            match motion {
+                MouseMotion::Relative { dx, dy } => {
+                    mi.dx = dx;
+                    mi.dy = dy;
+                }
+                MouseMotion::Absolute { x, y, virtual_desk } => {
+                    const NORMAL_FACTOR: f32 = 65535.0;
+
+                    mi.dx = (x * NORMAL_FACTOR) as i32;
+                    mi.dy = (y * NORMAL_FACTOR) as i32;
+
+                    if virtual_desk {
+                        mi.dwFlags |= winuser::MOUSEEVENTF_VIRTUALDESK;
+                    }
+
+                    mi.dwFlags |= winuser::MOUSEEVENTF_ABSOLUTE;
+                }
+            }
+
+            mi.time = 0; // let the system provide a time stamp
+            mi.dwExtraInfo = 0; // no extra information
+
+            Self(input)
+        }
+    }
+
+    /// Creates an `Input` that causes the mouse wheel to rotate by the given amount and
+    /// in the given direction.
+    ///
+    /// When the given direction is vertical, a positive motion means the wheel rotates
+    /// forward, away from the user; a negative value means the wheel rotates backward,
+    /// toward the user.
+    ///
+    /// When the given direction is horizontal, a positive motion means the wheel rotates
+    /// to the right; a negative value means the wheel rotates to the left.
+    ///
+    /// ## Example
+    ///
+    /// ```rust, ignore
+    /// use winput::{WheelDirection, Input};
+    ///
+    /// let input = Input::from_wheel(100.0, WheelDirection::Vertical);
+    /// winput::send_inputs(&[input]).unwrap();
+    /// ```
+    pub fn from_wheel(motion: f32, direction: WheelDirection) -> Self {
+        unsafe {
+            let mut input: winuser::INPUT = std::mem::zeroed();
+            input.type_ = winuser::INPUT_MOUSE;
+            let mi = input.u.mi_mut();
+            mi.dx = 0; // there is no mouse movement
+            mi.dy = 0;
+
+            const MOUSE_DELTA: f32 = 120.0;
+            mi.mouseData = (motion * MOUSE_DELTA) as i32 as u32;
+
+            mi.dwFlags = match direction {
+                WheelDirection::Vertical => winuser::MOUSEEVENTF_WHEEL,
+                WheelDirection::Horizontal => winuser::MOUSEEVENTF_HWHEEL,
+            };
+
             mi.time = 0; // let the system provide a time stamp
             mi.dwExtraInfo = 0; // no extra information
 
@@ -195,6 +291,44 @@ pub enum Button {
     X1,
     /// The X2 mouse button.
     X2,
+}
+
+/// Describes a mouse motion.
+#[derive(Clone, Copy, Debug)]
+pub enum MouseMotion {
+    /// Describes a relative mouse motion, in pixels.
+    ///
+    /// Relative mouse motion is subject to the effects of the mouse speed and the
+    /// two-mouse threshold values. A user sets these three values with the Pointer Speed
+    /// slider of the Control Panel's Mouse Properties sheet.
+    Relative {
+        /// The number of pixels the mouse should move, on the horizontal axis.
+        dx: i32,
+        /// The number of pixels the mouse should move, on the vertical axis. A positive
+        /// value makes the mouse go down.
+        dy: i32,
+    },
+    /// Describes an absolute mouse motion, in normalized coordinates.
+    Absolute {
+        /// The normalized position of the mouse on the horizontal axis. A value of
+        /// `0.0` maps to the left of the screen and a value of `1.0` maps to the
+        /// right of the screen.
+        x: f32,
+        /// The normalized position of the mouse on the vertical axis. A value of `0.0`
+        /// maps to the top of the screen and a value of `1.0` maps to the bottom on the
+        /// screen.
+        y: f32,
+        /// Whether the given normalized coordinates should map to the entier virtual
+        /// desktop (if multiple monitors are used, for example).
+        virtual_desk: bool,
+    },
+}
+
+/// Describes the direction of a mouse wheel.
+#[derive(Clone, Copy, PartialEq, Eq, Hash, Debug)]
+pub enum WheelDirection {
+    Vertical,
+    Horizontal,
 }
 
 /// A trait for objects that can be used as keys. For example `Vk` and `char` can be used
