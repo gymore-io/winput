@@ -4,6 +4,10 @@
 
 This crate aims to be lowlevel and straitforward enough to be used as a backend for other, more general crates of the genre. For this purpose, the "minimal" feature disables most of the stuff that is not really part of *Windows*' input system (things like [`Keylike`], for example, that are mostly there for convenience).
 
+## What is left to do?
+
+`winput` does not currently support any devices other than the mouse and the keyboard. I haven't really looked into how those work so if you know anything, feel free to submit an issue or a pull request!
+
 ## Examples
 
 The [`Keylike`] structure allows you to synthesize keystrokes on objects that can be used as keys.
