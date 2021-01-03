@@ -4,8 +4,9 @@ version = "0.1.0"
 authors = ["Gymore <gymore.contact@gmail.com>"]
 edition = "2018"
 description = "A high-level interface to Windows's input system."
-categories = ["os", "api-bindings"]
-keywords = ["windows", "input", "simulation", "keyboard", "mouse", "device"]
+categories = ["os::windows-apis", "api-bindings"]
+license = "MIT"
+keywords = ["windows", "input", "simulation", "keyboard", "mouse"]
 
 [lib]
 # Most of doctests involve simulating keystrokes/mouse motion.
