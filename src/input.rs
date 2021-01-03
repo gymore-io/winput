@@ -14,6 +14,15 @@ pub enum Action {
 
 /// This structure is used by `send_input` to store information for synthesizing input
 /// events such as keystrokes, mouse movement, and mouse clicks.
+///
+/// ## Example
+///
+/// ```rust, ignore
+/// use winput::{Input, Action};
+///
+/// let input = Input::from_char('A', Action::Press);
+/// winput::send_inputs(&[input]).unwrap();
+/// ```
 #[derive(Clone)]
 #[repr(transparent)]
 pub struct Input(winuser::INPUT);
@@ -91,6 +100,21 @@ impl Input {
 ///
 /// In the case of no events inserted onto the keyboard or mouse input stream, an error is
 /// returned.
+///
+/// ## Example
+///
+/// ```rust, ignore
+/// use winput::{Vk, Input, Action};
+///
+/// let inputs = [
+///     Input::from_vk(Vk::Shift, Action::Press),
+///     Input::from_vk(Vk::A, Action::Press),
+///     Input::from_vk(Vk::A, Action::Release),
+///     Input::from_vk(Vk::Shift, Action::Release),
+/// ];
+///
+/// winput::send_inputs(&inputs).unwrap();
+/// ```
 pub fn send_inputs(inputs: impl AsRef<[Input]>) -> Result<u32> {
     use std::mem;
 
