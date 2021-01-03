@@ -8,4 +8,4 @@ description = "A high-level interface to Windows's input system."
 [dependencies.winapi]
 version = "0.3"
 default-features = false
-features = ["winuser", "errhandlingapi"]
+features = ["winuser", "errhandlingapi", "winbase"]
