@@ -1,3 +1,4 @@
+use crate::error::WindowsError;
 use crate::input::{send_inputs, Action, Button, Input};
 use crate::vk::Vk;
 
@@ -9,20 +10,9 @@ use crate::vk::Vk;
 /// ```rust, ignore
 /// use winput::{Vk, Keylike};
 ///
-/// let inputs = [
-///     Vk::Control.press(),
-///     Vk::A.press(),
-///     'l'.press(),
-///     'l'.release(),
-///     'o'.press(),
-///     'o'.release(),
-///     'l'.press(),
-///     'l'.release(),
-///     Vk::A.release(),
-///     Vk::Control.release(),
-/// ];
-///
-/// winput::send_inputs(&inputs);
+/// Vk::Control.press().unwrap();
+/// Vk::A.trigger().unwrap();
+/// Vk::Control.release().unwrap();
 /// ```
 pub trait Keylike: Copy {
     /// Produces an `Input` that causes the given action to be taken on `self`.
@@ -41,7 +31,7 @@ pub trait Keylike: Copy {
     /// ```
     fn produce_input(self, action: Action) -> Input;
 
-    /// Produces an `Input` that causes `self` to be pressed.
+    /// Synthesize an event that presses the key.
     ///
     /// ## Panics
     ///
@@ -52,15 +42,21 @@ pub trait Keylike: Copy {
     /// ```rust, ignore
     /// use winput::Keylike;
     ///
-    /// let input = 'A'.press();
-    /// winput::send_inputs(&[input]);
+    /// 'A'.press().unwrap();
     /// ```
     #[inline(always)]
-    fn press(self) -> Input {
-        self.produce_input(Action::Press)
+    fn press(self) -> Result<(), WindowsError> {
+        let input = self.produce_input(Action::Press);
+        let count = crate::input::send_inputs(&[input]);
+
+        if count == 1 {
+            Ok(())
+        } else {
+            Err(WindowsError::from_last_error())
+        }
     }
 
-    /// Produces an `Input` that causes `self` to be released.
+    /// Synthesizes an event that releases the key.
     ///
     /// ## Panics
     ///
@@ -71,15 +67,21 @@ pub trait Keylike: Copy {
     /// ```rust, ignore
     /// use winput::Keylike;
     ///
-    /// let input = 'B'.release();
-    /// winput::send_inputs(&[input]);
+    /// 'B'.release().unwrap();
     /// ```
     #[inline(always)]
-    fn release(self) -> Input {
-        self.produce_input(Action::Release)
+    fn release(self) -> Result<(), WindowsError> {
+        let input = self.produce_input(Action::Release);
+        let count = crate::input::send_inputs(&[input]);
+
+        if count == 1 {
+            Ok(())
+        } else {
+            Err(WindowsError::from_last_error())
+        }
     }
 
-    /// Produces an `[Input; 2]` that causes `self` to be pressed then released.
+    /// Synthesizes two events. One that presses the key, one that releases the key.
     ///
     /// ## Panics
     ///
@@ -90,12 +92,22 @@ pub trait Keylike: Copy {
     /// ```rust, ignore
     /// use winput::Keylike;
     ///
-    /// let input = 'C'.trigger();
-    /// winput::send_inputs(&input);
+    /// 'C'.trigger().unwrap();
     /// ```
     #[inline(always)]
-    fn trigger(self) -> [Input; 2] {
-        [self.press(), self.release()]
+    fn trigger(self) -> Result<(), WindowsError> {
+        let inputs = [
+            self.produce_input(Action::Press),
+            self.produce_input(Action::Release),
+        ];
+
+        let count = crate::input::send_inputs(&inputs);
+
+        if count == 1 {
+            Ok(())
+        } else {
+            Err(WindowsError::from_last_error())
+        }
     }
 }
 
@@ -148,7 +160,8 @@ where
     let mut buffer = Vec::with_capacity(iter.size_hint().0 * 2);
 
     for key in iter {
-        buffer.extend_from_slice(&key.trigger());
+        buffer.push(key.produce_input(Action::Press));
+        buffer.push(key.produce_input(Action::Release));
     }
 
     send_inputs(&buffer)
