@@ -19,17 +19,17 @@ The [`Keylike`] structure allows you to synthesize keystrokes on objects that ca
 use winput::{Keylike, Vk, Button};
 
 // Synthesize keystrokes from a Virtual-Key Code
-Vk::Shift.press().unwrap();    // press the shift key
-Vk::A.send().unwrap();         // press then release the A key
-Vk::Shift.release().unwrap();  // release the shift key
+winput::press(Vk::Shift).unwrap();    // press the shift key
+winput::send(Vk::A).unwrap();         // press then release the A key
+winput::release(Vk::Shift).unwrap();  // release the shift key
 
 // Synthesize keystrokes from characters
-'F'.send().unwrap();
-'O'.send().unwrap();
-'O'.send().unwrap();
+winput::send('F').unwrap();
+winput::send('O').unwrap();
+winput::send('O').unwrap();
 
 // Synthesize keystrokes from mouse buttons
-Button::Left.send().unwrap();
+winput::send(Button::Left).unwrap();
 
 // You can synthesize keystrokes for the characters of a string
 winput::send_str("Hello, world!");
