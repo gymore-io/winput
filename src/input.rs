@@ -246,7 +246,7 @@ impl Input {
 /// keyboard or mouse input stream.
 ///
 /// If no events were successfully sent, the input stream was already blocked by another
-/// thread. You can use `winput::WindowsError::from_last_error` to retrieve additional
+/// thread. You can use [`winput::WindowsError::from_last_error`] to retrieve additional
 /// information about this function failing to send events.
 ///
 /// ## Example
@@ -263,6 +263,8 @@ impl Input {
 ///
 /// winput::send_inputs(&inputs);
 /// ```
+///
+/// [`winput::WindowsError::from_last_error`]: struct.WindowsError.html#method.from_last_error
 pub fn send_inputs(inputs: impl AsRef<[Input]>) -> u32 {
     use std::mem;
 
@@ -283,6 +285,54 @@ pub enum Action {
     Press,
     /// The action of releasing the key.
     Release,
+}
+
+impl Action {
+    /// Creates a new [`Action`] from the given `bool`.
+    ///
+    /// * If `is_pressed` is `true`, `Action::Press` is returned.
+    /// * If `is_pressed` is `false`, `Action::Release` is returned.
+    ///
+    /// ## Example
+    ///
+    /// ```rust
+    /// use winput::Action;
+    ///
+    /// assert_eq!(Action::from_down(true), Action::Press);
+    /// assert_eq!(Action::from_down(false), Action::Release);
+    /// ```
+    ///
+    /// [`Action`]: enum.Action.html
+    pub fn from_pressed(is_pressed: bool) -> Self {
+        if is_pressed {
+            Self::Press
+        } else {
+            Self::Release
+        }
+    }
+
+    /// Creates a new [`Action`] from the given `bool`.
+    ///
+    /// * If `is_pressed` is `true`, `Action::Release` is returned.
+    /// * If `is_pressed` is `false`, `Action::Press` is returned.
+    ///
+    /// ## Example
+    ///
+    /// ```rust
+    /// use winput::Action;
+    ///
+    /// assert_eq!(Action::from_down(true), Action::Release);
+    /// assert_eq!(Action::from_down(false), Action::Press);
+    /// ```
+    ///
+    /// [`Action`]: enum.Action.html
+    pub fn from_released(is_released: bool) -> Self {
+        if is_released {
+            Self::Release
+        } else {
+            Self::Press
+        }
+    }
 }
 
 /// A mouse button.
