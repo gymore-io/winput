@@ -246,7 +246,7 @@ impl Input {
 /// keyboard or mouse input stream.
 ///
 /// If no events were successfully sent, the input stream was already blocked by another
-/// thread. You can use `winput::WindowsError::from_last_error` to retreive additional
+/// thread. You can use `winput::WindowsError::from_last_error` to retrieve additional
 /// information about this function failing to send events.
 ///
 /// ## Example

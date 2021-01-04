@@ -10,7 +10,7 @@ use winapi::um::winuser;
 pub struct Mouse;
 
 impl Mouse {
-    /// Retreive the current position of the mouse, in screen coordinates.
+    /// Retrieve the current position of the mouse, in screen coordinates.
     ///
     /// ## Example
     ///

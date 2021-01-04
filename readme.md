@@ -1,8 +1,11 @@
+[![Documentation](https://docs.rs/winput/badge.svg)](https://docs.rs/winput/)
+[![Crates.io](https://img.shields.io/crates/v/winput.svg)](https://crates.io/crates/winput)
+
 `winput` is a high-level interface to *Windows*' input system.
 
 ## Target
 
-This crate aims to be lowlevel and straitforward enough to be used as a backend for other, more general crates of the genre. For this purpose, the "minimal" feature disables most of the stuff that is not really part of *Windows*' input system (things like [`Keylike`], for example, that are mostly there for convenience).
+This crate aims to be low-level and straightforward enough to be used as a backend for other, more general crates of the genre. For this purpose, the "minimal" feature disables most of the stuff that is not really part of *Windows*' input system (things like [`Keylike`], for example, that are mostly there for convenience).
 
 ## What is left to do?
 
@@ -25,7 +28,7 @@ Vk::Shift.release().unwrap();  // release the shift key
 'O'.send().unwrap();
 'O'.send().unwrap();
 
-// Synthesize keystrokes from mosue buttons
+// Synthesize keystrokes from mouse buttons
 Button::Left.send().unwrap();
 
 // You can synthesize keystrokes for the characters of a string
@@ -37,7 +40,7 @@ The [`Mouse`] structure can be used to manipulate the mouse.
 ```rust
 use winput::Mouse;
 
-// Retreive the position of the mouse.
+// Retrieve the position of the mouse.
 let (x, y) = Mouse::position().unwrap();
 
 // Set the mouse position
