@@ -8,11 +8,15 @@ use crate::vk::Vk;
 /// ## Example
 ///
 /// ```rust, ignore
-/// use winput::{Vk, Keylike};
+/// use winput::Vk;
 ///
-/// Vk::Control.press().unwrap();
-/// Vk::A.trigger().unwrap();
-/// Vk::Control.release().unwrap();
+/// // Print `A`
+/// winput::press(Vk::Shift);
+/// winput::send(Vk::A);
+/// winput::release(Vk::Shift);
+///
+/// // Do the same with one line
+/// winput::send('A');
 /// ```
 ///
 /// [`Vk`]: enum.Vk.html
@@ -33,94 +37,12 @@ pub trait Keylike: Copy {
     /// winput::send_inputs(&[input]);
     /// ```
     fn produce_input(self, action: Action) -> Input;
-
-    /// Synthesize an event that presses the key.
-    ///
-    /// ## Panics
-    ///
-    /// This function panics if `self` was not a valid key. For example, any `char` that
-    /// is above `0x0000ffff` cannot be turned into an `Input`.
-    ///
-    /// ## Example
-    ///
-    /// ```rust, ignore
-    /// use winput::Keylike;
-    ///
-    /// 'A'.press().unwrap();
-    /// ```
-    #[inline(always)]
-    fn press(self) -> Result<(), WindowsError> {
-        let input = self.produce_input(Action::Press);
-        let count = crate::input::send_inputs(&[input]);
-
-        if count == 1 {
-            Ok(())
-        } else {
-            Err(WindowsError::from_last_error())
-        }
-    }
-
-    /// Synthesizes an event that releases the key.
-    ///
-    /// ## Panics
-    ///
-    /// This function panics if `self` was not a valid key. For example, any `char` that
-    /// is above `0x0000ffff` cannot be turned into an `Input`.
-    ///
-    /// ## Example
-    ///
-    /// ```rust, ignore
-    /// use winput::Keylike;
-    ///
-    /// 'B'.release().unwrap();
-    /// ```
-    #[inline(always)]
-    fn release(self) -> Result<(), WindowsError> {
-        let input = self.produce_input(Action::Release);
-        let count = crate::input::send_inputs(&[input]);
-
-        if count == 1 {
-            Ok(())
-        } else {
-            Err(WindowsError::from_last_error())
-        }
-    }
-
-    /// Synthesizes two events. One that presses the key, one that releases the key.
-    ///
-    /// ## Panics
-    ///
-    /// This function panics if `self` was not a valid value. For example, any `char` that
-    /// is above `0x0000ffff` cannot be turned into an `Input`.
-    ///
-    /// ## Example
-    ///
-    /// ```rust, ignore
-    /// use winput::Keylike;
-    ///
-    /// 'C'.trigger().unwrap();
-    /// ```
-    #[inline(always)]
-    fn send(self) -> Result<(), WindowsError> {
-        let inputs = [
-            self.produce_input(Action::Press),
-            self.produce_input(Action::Release),
-        ];
-
-        let count = crate::input::send_inputs(&inputs);
-
-        if count == 0 {
-            Err(WindowsError::from_last_error())
-        } else {
-            Ok(())
-        }
-    }
 }
 
 impl Keylike for char {
     #[inline(always)]
     fn produce_input(self, action: Action) -> Input {
-        Input::from_char(self, action).expect("Invalid character")
+        Input::from_char(self, action).expect("character above 0x0000ffff")
     }
 }
 
@@ -134,6 +56,82 @@ impl Keylike for Vk {
 impl Keylike for Button {
     fn produce_input(self, action: Action) -> Input {
         Input::from_button(self, action)
+    }
+}
+
+/// Synthesize an event that presses the key.
+///
+/// ## Panics
+///
+/// This function panics if `key` was not a valid key. For example, any `char` that
+/// is above `0x0000ffff` cannot be turned into an `Input`.
+///
+/// ## Example
+///
+/// ```rust, ignore
+/// winput::press('A').unwrap();
+/// ```
+#[inline]
+pub fn press<K: Keylike>(key: K) -> Result<(), WindowsError> {
+    let input = key.produce_input(Action::Press);
+    let count = crate::input::send_inputs(&[input]);
+
+    if count == 1 {
+        Ok(())
+    } else {
+        Err(WindowsError::from_last_error())
+    }
+}
+
+/// Synthesizes an event that releases the key.
+///
+/// ## Panics
+///
+/// This function panics if `key` was not a valid key. For example, any `char` that
+/// is above `0x0000ffff` cannot be turned into an `Input`.
+///
+/// ## Example
+///
+/// ```rust, ignore
+/// winput::release('B').unwrap();
+/// ```
+#[inline(always)]
+pub fn release<K: Keylike>(key: K) -> Result<(), WindowsError> {
+    let input = key.produce_input(Action::Release);
+    let count = crate::input::send_inputs(&[input]);
+
+    if count == 1 {
+        Ok(())
+    } else {
+        Err(WindowsError::from_last_error())
+    }
+}
+
+/// Synthesizes two events. One that presses the key, one that releases the key.
+///
+/// ## Panics
+///
+/// This function panics if `key` was not a valid value. For example, any `char` that
+/// is above `0x0000ffff` cannot be turned into an `Input`.
+///
+/// ## Example
+///
+/// ```rust, ignore
+/// winput::send('C').unwrap();
+/// ```
+#[inline(always)]
+pub fn send<K: Keylike>(key: K) -> Result<(), WindowsError> {
+    let inputs = [
+        key.produce_input(Action::Press),
+        key.produce_input(Action::Release),
+    ];
+
+    let count = crate::input::send_inputs(&inputs);
+
+    if count == 0 {
+        Err(WindowsError::from_last_error())
+    } else {
+        Ok(())
     }
 }
 

@@ -10,7 +10,7 @@ pub use input::{send_inputs, Action, Input, MouseMotion, WheelDirection};
 #[cfg(not(feature = "minimal"))]
 mod keylike;
 #[cfg(not(feature = "minimal"))]
-pub use keylike::{send_keys, send_str, Keylike};
+pub use keylike::{press, release, send, send_keys, send_str, Keylike};
 
 mod mouse;
 pub use mouse::Mouse;
