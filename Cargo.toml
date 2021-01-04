@@ -7,6 +7,8 @@ description = "A high-level interface to Windows's input system."
 categories = ["os::windows-apis", "api-bindings"]
 license = "MIT"
 keywords = ["windows", "input", "simulation", "keyboard", "mouse"]
+repository = "https://github.com/gymore-io/winput"
+documentation = "https://docs.rs/winput/"
 
 [lib]
 # Most of doctests involve simulating keystrokes/mouse motion.
