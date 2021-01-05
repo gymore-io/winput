@@ -16,7 +16,7 @@ This crate aims to be low-level and straightforward enough to be used as a backe
 The [`Keylike`] structure allows you to synthesize keystrokes on objects that can be used as keys.
 
 ```rust
-use winput::{Keylike, Vk, Button};
+use winput::{Vk, Button};
 
 // Synthesize keystrokes from a Virtual-Key Code
 winput::press(Vk::Shift).unwrap();    // press the shift key
