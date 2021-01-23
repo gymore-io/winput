@@ -1,9 +1,8 @@
-use std::collections::HashMap;
 use std::mem::MaybeUninit;
 use std::ptr;
-use std::sync::atomic::{AtomicU8, AtomicUsize, Ordering};
+use std::sync::atomic::{AtomicU8, Ordering};
 use std::sync::mpsc;
-use std::sync::RwLock;
+use std::time::Duration;
 
 use winapi::um::winuser;
 
@@ -12,21 +11,19 @@ use crate::vk::Vk;
 
 /// The current state of the message loop.
 ///
-/// 0 -> shutdown | the message loop is not active.
-/// 1 -> starting | the message loop is starting.
-/// 2 -> active   | the message loop is active.
-/// 3 -> stopping | the message loop is stopping.
-/// 4 -> free     | the dispatcher loop has stopped.
+/// * 0 -> The message loop is not active.
+/// * 1 -> The `start` function has been called.
+///      The message loop is now starting.
+/// * 2 -> The message loop has successfully started.
+/// * 3 -> The message loop is now exiting.
 static STATE: AtomicU8 = AtomicU8::new(0);
 
 // Those values are always initialized if `STARTED` is `true`.
 // `SENDER` must only be used on the message loop's thread.
 static mut SENDER: MaybeUninit<mpsc::Sender<Event>> = MaybeUninit::uninit();
-static mut HANDLERS: MaybeUninit<RwLock<HashMap<usize, Box<dyn RawHandler>>>> =
-    MaybeUninit::uninit();
 
-static NEXT_HANDLER_ID: AtomicUsize = AtomicUsize::new(0);
-
+/// Blocks the calling thread (with a spin-lock) until `STATE` has the given value.
+#[inline(always)]
 fn block_until_state_is(val: u8) {
     while STATE.load(Ordering::SeqCst) != val {
         std::thread::sleep(std::time::Duration::from_millis(1));
@@ -145,28 +142,40 @@ unsafe extern "system" fn low_level_mouse_proc(
     winuser::CallNextHookEx(ptr::null_mut(), code, w_param, l_param)
 }
 
-/// Starts the global message loop and the global dispatch loop on two separate
-/// threads.
-/// This function will block until both loops started.
+/// Starts the message loop on a new thread.
 ///
 /// ## Panics
 ///
-/// This function panics if the message loop was already started.
-fn start_message_loop() {
+/// This function panics if the message loop is already active.
+///
+/// ## Example
+///
+/// ```rust, ignore
+/// use winput::message_loop;
+///
+/// let receiver = message_loop::start();
+///
+/// loop {
+///     println!("{:?}", receiver.next_event());
+/// }
+/// ```
+pub fn start() -> EventReceiver {
     assert_eq!(
         STATE.compare_exchange(0, 1, Ordering::SeqCst, Ordering::SeqCst),
         Ok(0),
-        "The global message loop was already active"
+        "The message loop was already active"
     );
 
     // The message loop is now starting.
-
-    // `started` is now `true`, we have to initialize `SENDER`.
+    // This channel is used to receive the messages of the message loop.
     let (s, r) = mpsc::channel();
-    unsafe { SENDER = MaybeUninit::new(s) };
-    unsafe { HANDLERS = MaybeUninit::new(RwLock::new(HashMap::new())) };
 
-    std::thread::spawn(move || {
+    // We have to initialize `SENDER`.
+    unsafe { SENDER = MaybeUninit::new(s) };
+
+    std::thread::spawn(|| {
+        println!("Message loop starting");
+
         unsafe {
             // Install the hooks
 
@@ -192,6 +201,7 @@ fn start_message_loop() {
             assert!(!mouse_hook.is_null(), "Failed to install the mouse hook");
 
             // The message loop has now started.
+            // It is ready to receive events.
             STATE.store(2, Ordering::SeqCst);
 
             let mut message = MaybeUninit::uninit();
@@ -204,14 +214,14 @@ fn start_message_loop() {
                     winuser::PM_REMOVE,
                 );
 
-                if result < 0 || STATE.load(Ordering::SeqCst) == 4 {
+                if result < 0 || STATE.load(Ordering::SeqCst) == 3 {
                     break;
                 }
 
                 std::thread::sleep(std::time::Duration::from_millis(1));
             }
 
-            // The message loop is now stopping.
+            // The message loop is now exiting.
 
             // Deinitialize the sender
             ptr::drop_in_place(SENDER.as_mut_ptr());
@@ -221,125 +231,14 @@ fn start_message_loop() {
             winuser::UnhookWindowsHookEx(mouse_hook);
 
             // The message loop is now shut down.
-            STATE.store(0, Ordering::SeqCst)
-        }
-    });
-
-    // We need to use a second thread because any work done on the actual message
-    // loop will block Windows' message system.
-
-    std::thread::spawn(move || {
-        // Block until the message loop started.
-        block_until_state_is(2);
-
-        loop {
-            if let Ok(event) = r.try_recv() {
-                // SAFETY: HANDLER is known to be initialized at the point.
-                let lock = unsafe { &*HANDLERS.as_ptr() }.read().unwrap();
-
-                for (_, handler) in lock.iter() {
-                    handler.handle_event(event);
-                }
-            }
-
-            if STATE.load(Ordering::SeqCst) == 3 {
-                // The message loop is stopping
-                STATE.store(4, Ordering::SeqCst);
-                break;
-            }
+            STATE.store(0, Ordering::SeqCst);
         }
     });
 
     block_until_state_is(2);
-
     // The message loop successfully started.
-}
 
-/// A handle to a `Handler`. This handle is returned by the [`subscribe_handler`] function
-/// and can be used to unsubscribe it using [`unsubscribe_handler`].
-///
-/// [`subscribe_handler`]: fn.subscribe_handler.html
-/// [`unsubscribe_handler`]: struct.HandlerHandle.html
-#[derive(Clone, Copy, PartialEq, Eq, Hash)]
-pub struct HandlerHandle(usize);
-
-/// Subscribes a new handler to the message loop. If the message loop was not already active,
-/// this function starts it on a separate thread.
-///
-/// ## Example
-///
-/// ```rust, ignore
-/// use winput::events::{self, Handler};
-///
-/// struct MyHandler;
-/// impl Handler for MyHandle {}
-///
-/// let h = events::subscribe_handler(MyHandler);
-/// std::thread::sleep(std::time::Duration::from_secs(6))
-/// events::unsubscribe_handle(h);
-/// ```
-pub fn subscribe_handler<H: 'static>(handler: H) -> HandlerHandle
-where
-    H: RawHandler,
-{
-    if STATE.load(Ordering::SeqCst) == 0 {
-        start_message_loop();
-    }
-
-    let id = NEXT_HANDLER_ID.fetch_add(1, Ordering::Relaxed);
-
-    // SAFETY: When the `start_message_loop` returns, the message loop is started
-    // thus the `HANDLERS` static variable is initialized.
-    unsafe {
-        (&*HANDLERS.as_ptr())
-            .write()
-            .unwrap()
-            .insert(id, Box::new(handler));
-    }
-
-    HandlerHandle(id)
-}
-
-// Unsubscribes a handler. If no handlers are left, the message loop is stopped.
-///
-/// For more information, see [`subscribe_handler`].
-///
-/// [`subscribe_handler`]: fn.subscribe_handler.html
-pub fn unsubscribe_handler(handle: HandlerHandle) {
-    if STATE.load(Ordering::SeqCst) == 0 {
-        return;
-    }
-
-    // SAFETY:
-    // `STATE != 0` => `HANDLERS` is initialized
-    let mut handlers = unsafe { (&*HANDLERS.as_ptr()).write().unwrap() };
-
-    handlers.remove(&handle.0);
-
-    if handlers.is_empty() {
-        // There is no handler left.
-        // We can stop the message loop.
-        stop();
-    }
-}
-
-/// Stops the event loop.
-fn stop() {
-    // The message loop is not active
-    if STATE.load(Ordering::SeqCst) == 0 {
-        return;
-    }
-
-    // The message loop was starting or is currently active.
-    block_until_state_is(2);
-
-    // The message loop is now active.
-
-    // Let's ask it to shutdown.
-    STATE.store(3, Ordering::SeqCst);
-
-    // Wait until the message loop is actually stoped.
-    block_until_state_is(0);
+    EventReceiver { receiver: r }
 }
 
 /// An event of any kind.
@@ -393,43 +292,40 @@ pub enum Event {
     },
 }
 
-/// A raw handler that receive every events at the same place.
-pub trait RawHandler: Sync + Send {
-    /// Handles the given event.
-    fn handle_event(&self, event: Event);
+// Only one instance of `EventReceiver` can be created at any given time.
+// That only instance relies on `STATE` and `SENDER`.
+
+/// The result of the `start` function. This structure receives the messages
+/// received by the message loop.
+pub struct EventReceiver {
+    receiver: mpsc::Receiver<Event>,
 }
 
-pub trait Handler {
-    /// A keyboard key was pressed or released.
-    fn keyboard(&self, _vk: Vk, _scan_code: u32, _action: Action) {}
+impl EventReceiver {
+    /// Blocks the current thread until an event is received.
+    pub fn next_event(&self) -> Event {
+        self.receiver.recv().unwrap()
+    }
 
-    /// The mouse moved.
-    fn mouse_move(&self, _x: i32, _y: i32) {}
+    /// Blocks the current thread until an event is received or the given
+    /// duration is reached.
+    pub fn next_event_timeout(&self, timeout: Duration) -> Option<Event> {
+        self.receiver.recv_timeout(timeout).ok()
+    }
 
-    /// A mouse button was pressed or released.
-    fn mouse_button(&self, _x: i32, _y: i32, _button: Button, _action: Action) {}
-
-    /// The mouse wheel was rotated.
-    fn mouse_wheel(&self, _x: i32, _y: i32, _delta: f32) {}
+    /// Tries to receive an event without blocking the thread.
+    pub fn try_next_event(&self) -> Option<Event> {
+        self.receiver.try_recv().ok()
+    }
 }
 
-impl<H: Handler + Send + Sync> RawHandler for H {
-    #[inline]
-    fn handle_event(&self, event: Event) {
-        match event {
-            Event::Keyboard {
-                vk,
-                scan_code,
-                action,
-            } => self.keyboard(vk, scan_code, action),
-            Event::MouseMove { x, y } => self.mouse_move(x, y),
-            Event::MouseButton {
-                x,
-                y,
-                button,
-                action,
-            } => self.mouse_button(x, y, button, action),
-            Event::MouseWheel { x, y, delta } => self.mouse_wheel(x, y, delta),
-        }
+impl Drop for EventReceiver {
+    fn drop(&mut self) {
+        // If the `EventReceiver` was able to be constructed,
+        // that means that `STATE` is currently `2`.
+        STATE.store(3, Ordering::SeqCst);
+
+        // Cleaning up the static variables is up to the message loop thread.
+        block_until_state_is(0);
     }
 }
