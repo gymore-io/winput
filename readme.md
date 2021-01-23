@@ -77,9 +77,35 @@ let inputs = [
 let number_of_inputs_inserted = winput::send_inputs(&inputs);
 
 assert_eq!(number_of_inputs_inserted, 3);
-// hopefully!
+```
+
+With the `events` feature, keyboard keystrokes and mouse inputs can be retreived. See the [`Handler`] trait for more information.
+
+```rust
+use winput::events::{self, Handler};
+use winput::{Vk, Action};
+
+struct MyHandler;
+impl Handler for MyHandler {
+    fn keyboard(&self, vk: Vk, _scan_code: u32, action: Action) {
+        if action == Action::Press {
+            println!("{:?}", vk);
+        }
+    }
+}
+
+fn main() {
+    // Subscribe the handler to the Windows's global message loop.
+    let h = events::subscribe_handler(MyHandler);
+    
+    std::thread::sleep(std::time::Duration::from_secs(60));
+
+    // Unsubscribe the handler.
+    events::unsubscribe_handler(h);
+}
 ```
 
 [`Keylike`]: https://docs.rs/winput/latest/winput/trait.Keylike.html
 [`Input`]: https://docs.rs/winput/latest/winput/struct.Input.html
 [`Mouse`]: https://docs.rs/winput/latest/winput/struct.Mouse.html
+[`Handler`]: https://docs.rs/winput/latest/winput/event_loop/trait.Handler.html

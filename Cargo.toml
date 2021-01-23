@@ -16,8 +16,13 @@ documentation = "https://docs.rs/winput/"
 doctest = false
 
 [features]
+default = ["events"]
+
 # Disables non-Windows related features.
 minimal = []
+
+# Enables the `events` module.
+events = []
 
 [dependencies.winapi]
 version = "0.3"

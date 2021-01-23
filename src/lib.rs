@@ -14,3 +14,6 @@ pub use keylike::{press, release, send, send_keys, send_str, Keylike};
 
 mod mouse;
 pub use mouse::Mouse;
+
+//#[cfg(feature = "event_loop")]
+pub mod events;

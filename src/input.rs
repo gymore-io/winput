@@ -290,21 +290,21 @@ pub enum Action {
 impl Action {
     /// Creates a new [`Action`] from the given `bool`.
     ///
-    /// * If `is_pressed` is `true`, `Action::Press` is returned.
-    /// * If `is_pressed` is `false`, `Action::Release` is returned.
+    /// * If `is_press` is `true`, `Action::Press` is returned.
+    /// * If `is_press` is `false`, `Action::Release` is returned.
     ///
     /// ## Example
     ///
     /// ```rust
     /// use winput::Action;
     ///
-    /// assert_eq!(Action::from_down(true), Action::Press);
-    /// assert_eq!(Action::from_down(false), Action::Release);
+    /// assert_eq!(Action::from_press(true), Action::Press);
+    /// assert_eq!(Action::from_press(false), Action::Release);
     /// ```
     ///
     /// [`Action`]: enum.Action.html
-    pub fn from_pressed(is_pressed: bool) -> Self {
-        if is_pressed {
+    pub fn from_presse(is_press: bool) -> Self {
+        if is_press {
             Self::Press
         } else {
             Self::Release
@@ -313,21 +313,21 @@ impl Action {
 
     /// Creates a new [`Action`] from the given `bool`.
     ///
-    /// * If `is_pressed` is `true`, `Action::Release` is returned.
-    /// * If `is_pressed` is `false`, `Action::Press` is returned.
+    /// * If `is_release` is `true`, `Action::Release` is returned.
+    /// * If `is_release` is `false`, `Action::Press` is returned.
     ///
     /// ## Example
     ///
     /// ```rust
     /// use winput::Action;
     ///
-    /// assert_eq!(Action::from_down(true), Action::Release);
-    /// assert_eq!(Action::from_down(false), Action::Press);
+    /// assert_eq!(Action::from_release(true), Action::Release);
+    /// assert_eq!(Action::from_release(false), Action::Press);
     /// ```
     ///
     /// [`Action`]: enum.Action.html
-    pub fn from_released(is_released: bool) -> Self {
-        if is_released {
+    pub fn from_release(is_release: bool) -> Self {
+        if is_release {
             Self::Release
         } else {
             Self::Press
