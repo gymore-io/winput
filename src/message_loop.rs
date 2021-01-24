@@ -13,7 +13,7 @@ use crate::vk::Vk;
 ///
 /// * 0 -> The message loop is not active.
 /// * 1 -> The `start` function has been called.
-///      The message loop is now starting.
+///       The message loop is now starting.
 /// * 2 -> The message loop has successfully started.
 /// * 3 -> The message loop is now exiting.
 static STATE: AtomicU8 = AtomicU8::new(0);
@@ -25,8 +25,8 @@ static mut SENDER: MaybeUninit<mpsc::Sender<Event>> = MaybeUninit::uninit();
 /// Blocks the calling thread (with a spin-lock) until `STATE` has the given value.
 #[inline(always)]
 fn block_until_state_is(val: u8) {
-    while STATE.load(Ordering::SeqCst) != val {
-        std::thread::sleep(std::time::Duration::from_millis(1));
+    while STATE.load(Ordering::Acquire) != val {
+        std::hint::spin_loop();
     }
 }
 
@@ -214,7 +214,7 @@ pub fn start() -> EventReceiver {
                     winuser::PM_REMOVE,
                 );
 
-                if result < 0 || STATE.load(Ordering::SeqCst) == 3 {
+                if result < 0 || STATE.load(Ordering::Acquire) == 3 {
                     break;
                 }
 
@@ -293,7 +293,8 @@ pub enum Event {
 }
 
 // Only one instance of `EventReceiver` can be created at any given time.
-// That only instance relies on `STATE` and `SENDER`.
+// That only instance relies on `STATE` and `SENDER` that is only initialized
+// when `STATE` is not `0`.
 
 /// The result of the `start` function. This structure receives the messages
 /// received by the message loop.
@@ -303,20 +304,25 @@ pub struct EventReceiver {
 
 impl EventReceiver {
     /// Blocks the current thread until an event is received.
+    #[inline]
     pub fn next_event(&self) -> Event {
         self.receiver.recv().unwrap()
     }
 
     /// Blocks the current thread until an event is received or the given
     /// duration is reached.
+    #[inline]
     pub fn next_event_timeout(&self, timeout: Duration) -> Option<Event> {
         self.receiver.recv_timeout(timeout).ok()
     }
 
     /// Tries to receive an event without blocking the thread.
+    #[inline]
     pub fn try_next_event(&self) -> Option<Event> {
         self.receiver.try_recv().ok()
     }
+
+    // TODO: add `next_event_deadline` when `Reciever::recv_deadline` is stable.
 }
 
 impl Drop for EventReceiver {
