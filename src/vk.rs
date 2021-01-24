@@ -696,4 +696,30 @@ impl Vk {
         let state = unsafe { GetAsyncKeyState(self.into()) } as u16;
         state & MASK == MASK
     }
+
+    /// Checks if the given key is currently toggled.
+    ///
+    /// For example, the `Vk::CapsLock` can be either on or off (appart from being
+    /// down or up).
+    ///
+    /// ## Example
+    ///
+    /// ```rust, ignore
+    /// use winput::Vk;
+    ///
+    /// if Vk::CapsLock.is_toggled() {
+    ///     println!("Do you like writing in all caps?");
+    /// } else {
+    ///     println!("I knew it! No one ever uses this key!");
+    /// }
+    /// ```
+    pub fn is_toggled(self) -> bool {
+        use winapi::um::winuser::GetKeyState;
+
+        const MASK: u16 = 0x0001;
+
+        // Calling C code
+        let state = unsafe { GetKeyState(self.into()) } as u16;
+        state & MASK == MASK
+    }
 }
