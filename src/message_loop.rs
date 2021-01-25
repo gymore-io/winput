@@ -19,7 +19,7 @@ use crate::WindowsError;
 /// * 3 -> The message loop is now exiting.
 static STATE: AtomicU8 = AtomicU8::new(0);
 
-// Those values are always initialized if `STARTED` is `true`.
+// This value initialized if `STATE` is `2`. It is uninitialized if `STATE` is `0`.
 // `SENDER` must only be used on the message loop's thread.
 static mut SENDER: MaybeUninit<mpsc::Sender<Event>> = MaybeUninit::uninit();
 
@@ -141,13 +141,6 @@ unsafe extern "system" fn low_level_mouse_proc(
 
 /// An error that can be produced by the [`start`] function.
 ///
-/// ## Examples
-///
-/// ```rust, ignore
-/// let _ = winput::messgage_loop::start();
-/// assert_eq!(winput::message_loop::is_active());
-/// ```
-///
 /// [`start`]: fn.start.html
 #[derive(Clone, Debug)]
 pub enum MessageLoopError {
@@ -162,7 +155,15 @@ pub enum MessageLoopError {
 }
 
 /// Checks if the message loop is currently active. When this function returns
-/// `true`, calling `start` produces an error.
+/// `true`, calling `start` always produces an error.
+///
+/// ## Examples
+///
+/// ```rust, ignore
+/// let _ = winput::messgage_loop::start();
+/// assert!(winput::message_loop::is_active());
+///
+/// ```
 #[inline]
 pub fn is_active() -> bool {
     STATE.load(Ordering::Acquire) != 0
@@ -192,8 +193,17 @@ pub fn is_active() -> bool {
 ///
 /// [`is_active`]: fn.is_active.html
 pub fn start() -> Result<EventReceiver, MessageLoopError> {
-    if STATE.compare_exchange(0, 1, Ordering::SeqCst, Ordering::SeqCst) != Ok(0) {
-        return Err(MessageLoopError::AlreadyActive);
+    loop {
+        match STATE.compare_exchange(0, 1, Ordering::SeqCst, Ordering::SeqCst) {
+            Ok(0) => break,
+
+            // If the message loop is shutting down, we can just wait
+            // a bit until we can start it again.
+            Err(3) => (),
+            _ => return Err(MessageLoopError::AlreadyActive),
+        }
+
+        std::hint::spin_loop();
     }
 
     // The message loop is now starting.
@@ -257,6 +267,8 @@ pub fn start() -> Result<EventReceiver, MessageLoopError> {
 
             let mut message = MaybeUninit::uninit();
             loop {
+                // Events are sent through the channel during the call to
+                // this function.
                 let result = winuser::PeekMessageW(
                     message.as_mut_ptr(),
                     ptr::null_mut(),
@@ -269,7 +281,7 @@ pub fn start() -> Result<EventReceiver, MessageLoopError> {
                     break;
                 }
 
-                std::thread::sleep(std::time::Duration::from_millis(1));
+                std::hint::spin_loop();
             }
 
             // The message loop is now exiting.
@@ -345,12 +357,14 @@ pub enum Event {
 
 // Only one instance of `EventReceiver` can be created at any given time.
 // That only instance relies on `STATE` and `SENDER` that is only initialized
-// when `STATE` is not `0`.
-
-/// The result of the `start` function. This structure receives the messages
+// when `STATE` is `2`.
+//
+/// The result of the [`start`] function. This structure receives the messages
 /// received by the message loop.
 ///
 /// The message loop is automatically stopped when this structure is dropped.
+///
+/// [`start`]: fn.start.html
 pub struct EventReceiver {
     receiver: mpsc::Receiver<Event>,
 }
@@ -404,7 +418,7 @@ impl Drop for EventReceiver {
 /// After calling this function, using the `EventReceiver` will always result
 /// in a panic.
 ///
-/// Be careful, if another libary created the message loop, this function will
+/// Be careful, if another libary already created a message loop, this function will
 /// still stop it.
 pub fn stop() {
     if !is_active() {
@@ -447,15 +461,31 @@ mod handler {
     /// functions.
     pub trait Handler {
         /// A keyboard key was pressed or released.
+        ///
+        /// More on [`Event::Keyboard`].
+        ///
+        /// [`Event::Keyboard`]: enum.Event.html#variant.Keyboard
         #[allow(unused_variables)]
         fn keyboard(&self, vk: Vk, scan_code: u32, action: Action) {}
         /// The mouse moved.
+        ///
+        /// More on [`Event::MouseMove`].
+        ///
+        /// [`Event::Keyboard`]: enum.Event.html#variant.MouseMove
         #[allow(unused_variables)]
         fn mouse_move(&self, x: i32, y: i32) {}
         /// A mouse button was pressed or released.
+        ///
+        /// More on [`Event::MouseButton].
+        ///
+        /// [`Event::Keyboard`]: enum.Event.html#variant.MouseButton
         #[allow(unused_variables)]
         fn mouse_button(&self, x: i32, y: i32, button: Button, action: Action) {}
         /// The mouse wheel was rotated.
+        ///
+        /// More on [`Event::MouseWheel`].
+        ///
+        /// [`Event::Keyboard`]: enum.Event.html#variant.MouseWheel
         #[allow(unused_variables)]
         fn mouse_wheel(&self, x: i32, y: i32, delta: f32) {}
     }
@@ -493,19 +523,15 @@ mod handler {
 
     impl Drop for HandlerHandle {
         fn drop(&mut self) {
-            // We must unsubscribe the handler here.
+            // We are unsubscribing the handler here.
 
             // If the dispatcher loop was not yet active,
             // let's wait for it.
             loop {
-                if STATE.compare_exchange(2, 3, Ordering::SeqCst, Ordering::SeqCst)
-                    == Ok(2)
-                {
-                    break;
-                }
-
-                if STATE.load(Ordering::Acquire) == 0 {
-                    panic!("STATE was 0 and there is still a handle left");
+                match STATE.compare_exchange(2, 3, Ordering::SeqCst, Ordering::SeqCst) {
+                    Ok(2) => break,
+                    Err(0) => panic!("STATE was 0 and there is still a handle left"),
+                    _ => (),
                 }
 
                 std::hint::spin_loop();
@@ -522,7 +548,7 @@ mod handler {
                 STATE.store(4, Ordering::SeqCst);
 
                 // In this case, we should wait until the dispatcher loop
-                // actually shut down.
+                // actually shuts down.
                 while STATE.load(Ordering::Acquire) != 0 {
                     std::hint::spin_loop();
                 }
@@ -553,17 +579,23 @@ mod handler {
     /// * 4 -> The dispatcher loop is shutting down
     static STATE: AtomicU8 = AtomicU8::new(0);
 
+    /// Subscibes a new Handler to Windows' message loop.
+    ///
+    /// This function returns a [`HandlerHandle`] that will unsubscribe the
+    /// handler when it gets dropped. You can drop it manually by calling
+    /// [`unsubscribe_handler`] on it.
+    ///
+    /// [`HandlerHandle`]: struct.HandlerHandle.html
+    /// [`unsubscribe_handler`]: fn.unsubscribe_handler.html
     pub fn subscribe_handler<H>(handler: H) -> Result<HandlerHandle, MessageLoopError>
     where
         H: 'static + RawHandler + Send + Sync,
     {
         let first = loop {
-            if STATE.compare_exchange(0, 1, Ordering::SeqCst, Ordering::SeqCst) == Ok(0) {
-                break true;
-            }
-
-            if STATE.load(Ordering::SeqCst) == 2 {
-                break false;
+            match STATE.compare_exchange(0, 1, Ordering::SeqCst, Ordering::SeqCst) {
+                Ok(0) => break true,
+                Err(2) => break false,
+                _ => (),
             }
 
             std::hint::spin_loop();
@@ -635,6 +667,8 @@ mod handler {
     }
 
     /// Unsubscribes a handler from the message loop.
+    ///
+    /// This function is equivalent to dropping the handle.
     #[inline(always)]
     pub fn unsubscribe_handler(handler: HandlerHandle) {
         // The handler is unsubscribed in `handler` drop implementation.

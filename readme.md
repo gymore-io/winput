@@ -79,15 +79,30 @@ let number_of_inputs_inserted = winput::send_inputs(&inputs);
 assert_eq!(number_of_inputs_inserted, 3);
 ```
 
-With the `message_loop` feature, keyboard keystrokes and mouse inputs can be retreived.
+With the `message_loop` feature (enabled by default), keyboard keystrokes and mouse inputs can be retreived.
 
 ```rust
-fn main() {
-    let receiver = winput::message_loop::start();
+use winput::{Vk, Action, Button};
+use winput::message_loop;
 
-    loop {
-        println!("{:?}", receiver.next_event());
+struct MyHandler;
+impl message_loop::Handler for MyHandler {
+    fn keyboard(&self, vk: Vk, _scan_code: u32, action: Action) {
+        if action == Action::Press {
+            println!("You just pressed the {:?} key!", vk);
+        }
     }
+
+    fn mouse_button(&self, _x: i32, _y: i32, button: Button, action: Action) {
+        if action == Action::Press {
+            println!("You just pressed the {:?} button!", button);
+        }
+    }
+}
+
+fn main() {
+    message_loop::subscribe_handler(MyHandler);
+    std::thread::sleep(std::time::Duration::from_secs(5));
 }
 
 ```
