@@ -661,7 +661,7 @@ impl Vk {
     /// ```rust
     /// use winput::Vk;
     ///
-    /// let n = Vk::Escape.into();
+    /// let n = Vk::Escape.into_u8();
     ///
     /// // SAFETY: `n` is a valid Virtual-Key Code.
     /// let vk = unsafe { Vk::from_u8(n) };
@@ -672,6 +672,21 @@ impl Vk {
         // SAFETY: The caller must ensure that the given `u8` represents a valid
         // Virtual-Key Code.
         std::mem::transmute(n)
+    }
+
+    /// Converts this Virtual-Key Code into a `u8`.
+    ///
+    /// ## Example
+    ///
+    /// ```rust
+    /// use winput::Vk;
+    ///
+    /// let value = Vk::Enter.into_u8();
+    /// assert_eq!(value, 0x0d);
+    /// ```
+    #[inline(always)]
+    pub fn into_u8(self) -> u8 {
+        self.into()
     }
 
     /// Checks if this Virtual-Key Code is currently being pressed.
