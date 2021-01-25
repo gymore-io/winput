@@ -5,7 +5,7 @@ mod vk;
 pub use vk::Vk;
 
 mod input;
-pub use input::{send_inputs, Action, Input, MouseMotion, WheelDirection};
+pub use input::{send_inputs, Action, Button, Input, MouseMotion, WheelDirection};
 
 #[cfg(not(feature = "minimal"))]
 mod keylike;

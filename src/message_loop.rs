@@ -349,6 +349,8 @@ pub enum Event {
 
 /// The result of the `start` function. This structure receives the messages
 /// received by the message loop.
+///
+/// The message loop is automatically stopped when this structure is dropped.
 pub struct EventReceiver {
     receiver: mpsc::Receiver<Event>,
 }
@@ -357,20 +359,34 @@ impl EventReceiver {
     /// Blocks the current thread until an event is received.
     #[inline]
     pub fn next_event(&self) -> Event {
-        self.receiver.recv().unwrap()
+        self.receiver
+            .recv()
+            .expect("The message loop is not active")
     }
 
     /// Blocks the current thread until an event is received or the given
     /// duration is reached.
     #[inline]
     pub fn next_event_timeout(&self, timeout: Duration) -> Option<Event> {
-        self.receiver.recv_timeout(timeout).ok()
+        match self.receiver.recv_timeout(timeout) {
+            Ok(val) => Some(val),
+            Err(mpsc::RecvTimeoutError::Timeout) => None,
+            Err(mpsc::RecvTimeoutError::Disconnected) => {
+                panic!("The message loop is not active")
+            }
+        }
     }
 
     /// Tries to receive an event without blocking the thread.
     #[inline]
     pub fn try_next_event(&self) -> Option<Event> {
-        self.receiver.try_recv().ok()
+        match self.receiver.try_recv() {
+            Ok(val) => Some(val),
+            Err(mpsc::TryRecvError::Empty) => None,
+            Err(mpsc::TryRecvError::Disconnected) => {
+                panic!("The message loop is not active")
+            }
+        }
     }
 
     // TODO: add `next_event_deadline` when `Reciever::recv_deadline` is stable.
@@ -378,13 +394,250 @@ impl EventReceiver {
 
 impl Drop for EventReceiver {
     fn drop(&mut self) {
-        // If the `EventReceiver` was able to be constructed,
-        // that means that `STATE` is currently `2`.
-        STATE.store(3, Ordering::SeqCst);
+        // Stop the message loop.
+        stop();
+    }
+}
 
-        // Cleaning up the static variables is up to the message loop thread.
-        while STATE.load(Ordering::Acquire) != 0 {
-            std::hint::spin_loop();
+/// Stops the message loop.
+///
+/// After calling this function, using the `EventReceiver` will always result
+/// in a panic.
+///
+/// Be careful, if another libary created the message loop, this function will
+/// still stop it.
+pub fn stop() {
+    if !is_active() {
+        return;
+    }
+
+    // If the `EventReceiver` was able to be constructed,
+    // that means that `STATE` is currently `2`.
+    STATE.store(3, Ordering::SeqCst);
+
+    // Cleaning up the static variables is up to the message loop thread.
+    // We just have to wait until it finishes.
+    while STATE.load(Ordering::Acquire) != 0 {
+        std::hint::spin_loop();
+    }
+}
+
+#[cfg(not(feature = "minimal"))]
+pub use handler::*;
+
+#[cfg(not(feature = "minimal"))]
+mod handler {
+    use std::collections::HashMap;
+    use std::mem::MaybeUninit;
+    use std::sync::atomic::{AtomicU8, AtomicUsize, Ordering};
+    use std::sync::RwLock;
+
+    use crate::{Action, Button, Vk};
+
+    use super::{Event, MessageLoopError};
+
+    /// A structure for types that want to be notified of any event sent
+    /// to the Window's message loop.
+    pub trait RawHandler {
+        /// Handles a received event.
+        fn handle_event(&self, event: Event);
+    }
+
+    /// An alternative to `RawHandler` that breaks the received inputs into multiple
+    /// functions.
+    pub trait Handler {
+        /// A keyboard key was pressed or released.
+        #[allow(unused_variables)]
+        fn keyboard(&self, vk: Vk, scan_code: u32, action: Action) {}
+        /// The mouse moved.
+        #[allow(unused_variables)]
+        fn mouse_move(&self, x: i32, y: i32) {}
+        /// A mouse button was pressed or released.
+        #[allow(unused_variables)]
+        fn mouse_button(&self, x: i32, y: i32, button: Button, action: Action) {}
+        /// The mouse wheel was rotated.
+        #[allow(unused_variables)]
+        fn mouse_wheel(&self, x: i32, y: i32, delta: f32) {}
+    }
+
+    // Any `handler` can be used as a `RawHandler`.
+    impl<H: Handler> RawHandler for H {
+        #[inline]
+        fn handle_event(&self, event: Event) {
+            match event {
+                Event::Keyboard {
+                    vk,
+                    scan_code,
+                    action,
+                } => self.keyboard(vk, scan_code, action),
+                Event::MouseMove { x, y } => self.mouse_move(x, y),
+                Event::MouseButton {
+                    x,
+                    y,
+                    button,
+                    action,
+                } => self.mouse_button(x, y, button, action),
+                Event::MouseWheel { x, y, delta } => self.mouse_wheel(x, y, delta),
+            }
         }
+    }
+
+    /// The unique id of a handler. This id is used to unsubscribe a handler from the
+    /// message loop.
+    ///
+    /// Once that structure goes out of scope, its associated handler is automatically
+    /// unsubscribed.
+    #[derive(Debug)]
+    pub struct HandlerHandle(usize);
+    static NEXT_HANDLE_ID: AtomicUsize = AtomicUsize::new(0);
+
+    impl Drop for HandlerHandle {
+        fn drop(&mut self) {
+            // We must unsubscribe the handler here.
+
+            // If the dispatcher loop was not yet active,
+            // let's wait for it.
+            loop {
+                if STATE.compare_exchange(2, 3, Ordering::SeqCst, Ordering::SeqCst)
+                    == Ok(2)
+                {
+                    break;
+                }
+
+                if STATE.load(Ordering::Acquire) == 0 {
+                    panic!("STATE was 0 and there is still a handle left");
+                }
+
+                std::hint::spin_loop();
+            }
+
+            let mut lock = unsafe { &*HANDLERS.as_ptr() }.write().unwrap();
+            lock.remove(&self.0);
+
+            if lock.is_empty() {
+                drop(lock);
+
+                // This was the last handle.
+                // The dispatcher loop must stop.
+                STATE.store(4, Ordering::SeqCst);
+
+                // In this case, we should wait until the dispatcher loop
+                // actually shut down.
+                while STATE.load(Ordering::Acquire) != 0 {
+                    std::hint::spin_loop();
+                }
+            } else {
+                // Continue as before.
+                STATE.store(2, Ordering::SeqCst);
+            }
+        }
+    }
+
+    /// The list of all handlers, subscribed by `subscribe_handler`.
+    ///
+    /// This value is initialized if and only if `STATE` is `2`. . It is
+    /// uninitialized if `STATE` is `0`.
+    ///
+    /// This value is mutably borrowed in `subscribe_handler`  (initialized) if the
+    /// dispatcher loop is not active OR in `unsubscribe_handler` when no handlers
+    /// are left in the map.
+    /// Otherwise, this value is shared.
+    static mut HANDLERS: MaybeUninit<
+        RwLock<HashMap<usize, Box<dyn RawHandler + Sync + Send>>>,
+    > = MaybeUninit::uninit();
+
+    /// * 0 -> The dispatcher loop is not active
+    /// * 1 -> The dispatcher loop is starting
+    /// * 2 -> The dispatcher loop is active
+    /// * 3 -> A handle is being unsubscribed
+    /// * 4 -> The dispatcher loop is shutting down
+    static STATE: AtomicU8 = AtomicU8::new(0);
+
+    pub fn subscribe_handler<H>(handler: H) -> Result<HandlerHandle, MessageLoopError>
+    where
+        H: 'static + RawHandler + Send + Sync,
+    {
+        let first = loop {
+            if STATE.compare_exchange(0, 1, Ordering::SeqCst, Ordering::SeqCst) == Ok(0) {
+                break true;
+            }
+
+            if STATE.load(Ordering::SeqCst) == 2 {
+                break false;
+            }
+
+            std::hint::spin_loop();
+        };
+
+        if first {
+            // We are adding the first handler.
+            // We know we are the only thread to be able to access `HANDLERS`.
+
+            // The message loop was not active (or we're not able to use it).
+            let receiver = match super::start() {
+                Ok(r) => r,
+                Err(e) => {
+                    // The message loop was already active.
+                    STATE.store(0, Ordering::SeqCst);
+                    return Err(e);
+                }
+            };
+
+            // We have to initialize `HANDLERS`
+            unsafe { HANDLERS.as_mut_ptr().write(RwLock::new(HashMap::new())) };
+
+            let handlers = unsafe { &mut *HANDLERS.as_mut_ptr() }.get_mut().unwrap();
+            let id = HandlerHandle(NEXT_HANDLE_ID.fetch_add(1, Ordering::Relaxed));
+            handlers.insert(id.0, Box::new(handler));
+
+            // Start the thread that will dispatch events to the subscribed
+            // handlers.
+
+            STATE.store(2, Ordering::SeqCst);
+
+            std::thread::spawn(move || {
+                loop {
+                    let event = receiver.next_event();
+
+                    let lock = unsafe { &*HANDLERS.as_ptr() }.read().unwrap();
+                    for (_, handler) in lock.iter() {
+                        handler.handle_event(event)
+                    }
+                    drop(lock);
+
+                    if STATE.load(Ordering::Acquire) == 4 {
+                        // No handler is left.
+                        // We can shutdown the message loop.
+                        break;
+                    }
+                }
+
+                // If we got here, it means that `HANDLERS` is an empty set.
+                // No one will access `HANDLERS` again unless a new handlers
+                // subscribes. In this case, this handle will have to wait
+                // until `STATE` is back to `0`.
+                unsafe { std::ptr::drop_in_place(HANDLERS.as_mut_ptr()) };
+
+                STATE.store(0, Ordering::SeqCst);
+                // `receiver` will be dropped here, causing the message loop to
+                // be stopped.
+            });
+
+            Ok(id)
+        } else {
+            // We're not the first one
+            // But we know that `HANDLER` is initialized.
+            let mut lock = unsafe { &*HANDLERS.as_ptr() }.write().unwrap();
+            let id = HandlerHandle(NEXT_HANDLE_ID.fetch_add(1, Ordering::Relaxed));
+            lock.insert(id.0, Box::new(handler));
+            Ok(id)
+        }
+    }
+
+    /// Unsubscribes a handler from the message loop.
+    #[inline(always)]
+    pub fn unsubscribe_handler(handler: HandlerHandle) {
+        // The handler is unsubscribed in `handler` drop implementation.
+        drop(handler)
     }
 }
