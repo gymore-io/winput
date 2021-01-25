@@ -16,6 +16,8 @@ documentation = "https://docs.rs/winput/"
 doctest = false
 
 [features]
+default = ["message_loop"]
+
 # Disables non-Windows related features.
 minimal = []
 

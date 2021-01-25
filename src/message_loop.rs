@@ -8,6 +8,7 @@ use winapi::um::winuser;
 
 use crate::input::{Action, Button};
 use crate::vk::Vk;
+use crate::WindowsError;
 
 /// The current state of the message loop.
 ///
@@ -22,14 +23,8 @@ static STATE: AtomicU8 = AtomicU8::new(0);
 // `SENDER` must only be used on the message loop's thread.
 static mut SENDER: MaybeUninit<mpsc::Sender<Event>> = MaybeUninit::uninit();
 
-/// Blocks the calling thread (with a spin-lock) until `STATE` has the given value.
-#[inline(always)]
-fn block_until_state_is(val: u8) {
-    while STATE.load(Ordering::Acquire) != val {
-        std::hint::spin_loop();
-    }
-}
-
+/// Callback called by Windows' message loop on the message loop's thread when a
+/// `WM_KEYBOARD_LL` event is received.
 unsafe extern "system" fn low_level_keyboard_proc(
     code: i32,
     w_param: usize,
@@ -58,6 +53,8 @@ unsafe extern "system" fn low_level_keyboard_proc(
     winuser::CallNextHookEx(ptr::null_mut(), code, w_param, l_param)
 }
 
+/// Callback called by Windows' message loop on the message loop's thread when a
+/// `WM_MOUSE_LL` event is received.
 unsafe extern "system" fn low_level_mouse_proc(
     code: i32,
     w_param: usize,
@@ -142,11 +139,44 @@ unsafe extern "system" fn low_level_mouse_proc(
     winuser::CallNextHookEx(ptr::null_mut(), code, w_param, l_param)
 }
 
+/// An error that can be produced by the [`start`] function.
+///
+/// ## Examples
+///
+/// ```rust, ignore
+/// let _ = winput::messgage_loop::start();
+/// assert_eq!(winput::message_loop::is_active());
+/// ```
+///
+/// [`start`]: fn.start.html
+#[derive(Clone, Debug)]
+pub enum MessageLoopError {
+    /// Only one message loop can be created at any given time. This error
+    /// is produced when [`start`] is called even though the message loop
+    /// was already active.
+    AlreadyActive,
+
+    /// The function failed to install a hook (the keyboard hook or the mouse
+    /// hook).
+    HookInstallation(WindowsError),
+}
+
+/// Checks if the message loop is currently active. When this function returns
+/// `true`, calling `start` produces an error.
+#[inline]
+pub fn is_active() -> bool {
+    STATE.load(Ordering::Acquire) != 0
+}
+
 /// Starts the message loop on a new thread.
 ///
-/// ## Panics
+/// ## Returns
 ///
-/// This function panics if the message loop is already active.
+/// This function returns an error if the message loop is already active: only one
+/// message loop can be started at any given time. Be carfull if another library is
+/// also using the message loop.
+///
+/// You can check if the message loop is currently active by calling [`is_active`].
 ///
 /// ## Example
 ///
@@ -159,12 +189,12 @@ unsafe extern "system" fn low_level_mouse_proc(
 ///     println!("{:?}", receiver.next_event());
 /// }
 /// ```
-pub fn start() -> EventReceiver {
-    assert_eq!(
-        STATE.compare_exchange(0, 1, Ordering::SeqCst, Ordering::SeqCst),
-        Ok(0),
-        "The message loop was already active"
-    );
+///
+/// [`is_active`]: fn.is_active.html
+pub fn start() -> Result<EventReceiver, MessageLoopError> {
+    if STATE.compare_exchange(0, 1, Ordering::SeqCst, Ordering::SeqCst) != Ok(0) {
+        return Err(MessageLoopError::AlreadyActive);
+    }
 
     // The message loop is now starting.
     // This channel is used to receive the messages of the message loop.
@@ -173,9 +203,11 @@ pub fn start() -> EventReceiver {
     // We have to initialize `SENDER`.
     unsafe { SENDER = MaybeUninit::new(s) };
 
-    std::thread::spawn(|| {
-        println!("Message loop starting");
+    // This channel is used to retreive a potential error from the message loop's
+    // thread.
+    let (error_s, error_r) = mpsc::channel();
 
+    std::thread::spawn(move || {
         unsafe {
             // Install the hooks
 
@@ -186,10 +218,14 @@ pub fn start() -> EventReceiver {
                 0,
             );
 
-            assert!(
-                !keyboard_hook.is_null(),
-                "Failed to install the keyboard hook"
-            );
+            if keyboard_hook.is_null() {
+                error_s
+                    .send(Err(MessageLoopError::HookInstallation(
+                        WindowsError::from_last_error(),
+                    )))
+                    .unwrap();
+                return;
+            }
 
             let mouse_hook = winuser::SetWindowsHookExW(
                 winuser::WH_MOUSE_LL,
@@ -198,11 +234,26 @@ pub fn start() -> EventReceiver {
                 0,
             );
 
-            assert!(!mouse_hook.is_null(), "Failed to install the mouse hook");
+            if mouse_hook.is_null() {
+                winuser::UnhookWindowsHookEx(keyboard_hook);
+
+                error_s
+                    .send(Err(MessageLoopError::HookInstallation(
+                        WindowsError::from_last_error(),
+                    )))
+                    .unwrap();
+                return;
+            }
 
             // The message loop has now started.
             // It is ready to receive events.
             STATE.store(2, Ordering::SeqCst);
+
+            // Notify the main thread that the initialisation is a success.
+            error_s.send(Ok(())).unwrap();
+            // After this point, the `start` function will return and the receiver
+            // will be dropped. Using the `error_s` after this will always return an error.
+            drop(error_s);
 
             let mut message = MaybeUninit::uninit();
             loop {
@@ -235,10 +286,10 @@ pub fn start() -> EventReceiver {
         }
     });
 
-    block_until_state_is(2);
-    // The message loop successfully started.
-
-    EventReceiver { receiver: r }
+    error_r
+        .recv()
+        .unwrap()
+        .map(|()| EventReceiver { receiver: r })
 }
 
 /// An event of any kind.
@@ -332,6 +383,8 @@ impl Drop for EventReceiver {
         STATE.store(3, Ordering::SeqCst);
 
         // Cleaning up the static variables is up to the message loop thread.
-        block_until_state_is(0);
+        while STATE.load(Ordering::Acquire) != 0 {
+            std::hint::spin_loop();
+        }
     }
 }

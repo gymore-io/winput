@@ -15,5 +15,5 @@ pub use keylike::{press, release, send, send_keys, send_str, Keylike};
 mod mouse;
 pub use mouse::Mouse;
 
-//#[cfg(feature = "message_loop")]
+#[cfg(feature = "message_loop")]
 pub mod message_loop;
