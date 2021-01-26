@@ -1,3 +1,35 @@
+//! The `message_loop` module provides a way to retreive keyboard and mouse
+//! input messages directly from the system.
+//!
+//! Internally, the [`SetWindowsHookEx`] function is used along with the
+//! [`WM_KEYBOARD_LL`] and [`WM_MOUSE_LL`] events.
+//!
+//! ## Examples
+//!
+//! ```rust, ignore
+//! use winput::{Vk, Action};
+//! use winput::message_loop;
+//!
+//! let receiver = message_loop::start().unwrap();
+//!
+//! loop {
+//!     match receiver.next_event() {
+//!         message_loop::Event::Keyboard {
+//!             vk,
+//!             action: Action::Press,
+//!             ..
+//!         } => {
+//!             if vk == Vk::Escape {
+//!                 break;
+//!             } else {
+//!                 println!("{:?} was pressed!", vk);
+//!             }
+//!         },
+//!         _ => (),
+//!     }
+//! }
+//! ```
+
 use std::mem::MaybeUninit;
 use std::ptr;
 use std::sync::atomic::{AtomicU8, Ordering};
