@@ -10,7 +10,7 @@ This crate aims to be low-level and straightforward enough to be used as a backe
 ## Features
 
 * `minimal`: This feature disables the [`Keylike`] structure as well as some shortcut functions. This feature has been made for people that want to use the straightforward api `winput` provides.
-* `message_loop`: This feature enables the `message_loop` module that gives a way to globally retreive keyboard and mouse events from Windows' message system.
+* `message_loop`: This feature enables the [`message_loop`] module that gives a way to globally retreive keyboard and mouse events from Windows' message system.
 
 ## What is left to do?
 
@@ -113,4 +113,5 @@ loop {
 [`Keylike`]: https://docs.rs/winput/latest/winput/trait.Keylike.html
 [`Input`]: https://docs.rs/winput/latest/winput/struct.Input.html
 [`Mouse`]: https://docs.rs/winput/latest/winput/struct.Mouse.html
-[`Handler`]: https://docs.rs/winput/latest/winput/event_loop/trait.Handler.html
+[`Handler`]: https://docs.rs/winput/latest/winput/message_loop/trait.Handler.html
+[`message_loop`]: https://docs.rs/winput/latest/winput/message_loop/
