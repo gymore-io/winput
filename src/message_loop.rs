@@ -2,7 +2,8 @@
 //! input messages directly from the system.
 //!
 //! Internally, the [`SetWindowsHookEx`] function is used along with the
-//! [`WM_KEYBOARD_LL`] and [`WM_MOUSE_LL`] events.
+//! [`WH_KEYBOARD_LL`] and [`WH_MOUSE_LL`] events. Everything gets dispatched
+//! by calling [`PeekMessageW`].
 //!
 //! ## Examples
 //!
@@ -29,6 +30,11 @@
 //!     }
 //! }
 //! ```
+//!
+//! [`SetWindowsHookEx`]: https://docs.microsoft.com/en-us/windows/win32/api/winuser/nf-winuser-setwindowshookexw
+//! [`WH_KEYBOARD_LL`]: https://docs.microsoft.com/en-us/windows/win32/winmsg/about-hooks#wh_keyboard_ll
+//! [`WH_MOUSE_LL`]: https://docs.microsoft.com/en-us/windows/win32/winmsg/about-hooks#wh_mouse
+//! [`PeekMessageW`]: https://docs.microsoft.com/en-us/windows/win32/api/winuser/nf-winuser-peekmessagew
 
 use std::mem::MaybeUninit;
 use std::ptr;
