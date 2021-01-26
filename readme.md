@@ -82,29 +82,27 @@ assert_eq!(number_of_inputs_inserted, 3);
 With the `message_loop` feature (enabled by default), keyboard keystrokes and mouse inputs can be retreived.
 
 ```rust
-use winput::{Vk, Action, Button};
+use winput::{Vk, Action};
 use winput::message_loop;
 
-struct MyHandler;
-impl message_loop::Handler for MyHandler {
-    fn keyboard(&self, vk: Vk, _scan_code: u32, action: Action) {
-        if action == Action::Press {
-            println!("You just pressed the {:?} key!", vk);
-        }
-    }
+let receiver = message_loop::start().unwrap();
 
-    fn mouse_button(&self, _x: i32, _y: i32, button: Button, action: Action) {
-        if action == Action::Press {
-            println!("You just pressed the {:?} button!", button);
-        }
+loop {
+    match receiver.next_event() {
+        message_loop::Event::Keyboard {
+            vk,
+            action: Action::Press,
+            ..
+        } => {
+            if vk == Vk::Escape {
+                break;
+            } else {
+                println!("{:?} was pressed!", vk);
+            }
+        },
+        _ => (),
     }
 }
-
-fn main() {
-    message_loop::subscribe_handler(MyHandler);
-    std::thread::sleep(std::time::Duration::from_secs(5));
-}
-
 ```
 
 [`Keylike`]: https://docs.rs/winput/latest/winput/trait.Keylike.html

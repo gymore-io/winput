@@ -98,9 +98,9 @@ impl fmt::Display for WindowsError {
     #[inline(always)]
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         if let Some(ref desc) = self.description {
-            write!(f, "{} (code: {})", desc, self.code)
+            write!(f, "\"{}\" (code: {})", desc, self.code)
         } else {
-            write!(f, "code: {}", self.code)
+            write!(f, "WindowsError(code: {})", self.code)
         }
     }
 }
