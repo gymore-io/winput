@@ -7,6 +7,11 @@
 
 This crate aims to be low-level and straightforward enough to be used as a backend for other, more general crates of the genre. For this purpose, the "minimal" feature disables most of the stuff that is not really part of *Windows*' input system (things like [`Keylike`], for example, that are mostly there for convenience).
 
+## Features
+
+* `minimal`: This feature disables the [`Keylike`] structure as well as some shortcut functions. This feature has been made for people that want to use the straightforward api `winput` provides.
+* `message_loop`: This feature enables the `message_loop` module that gives a way to globally retreive keyboard and mouse events from Windows' message system.
+
 ## What is left to do?
 
 `winput` does not currently support any devices other than the mouse and the keyboard. I haven't really looked into how those work so if you know anything, feel free to submit an issue or a pull request!
