@@ -114,7 +114,7 @@ unsafe extern "system" fn low_level_mouse_proc(
                 x: ms_hook_struct.pt.x,
                 y: ms_hook_struct.pt.y,
                 action: Action::Release,
-                button: Button::Right,
+                button: Button::Left,
             },
 
             winuser::WM_RBUTTONDOWN => Event::MouseButton {
@@ -408,6 +408,14 @@ pub struct EventReceiver {
 }
 
 impl EventReceiver {
+    /// Discard all the events stored in the receiver.
+    #[inline]
+    pub fn clear(&self) {
+        if is_active() {
+            while let Some(_) = self.try_next_event() {}
+        }
+    }
+
     /// Blocks the current thread until an event is received.
     #[inline]
     pub fn next_event(&self) -> Event {
