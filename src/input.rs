@@ -303,7 +303,7 @@ impl Action {
     /// ```
     ///
     /// [`Action`]: enum.Action.html
-    pub fn from_presse(is_press: bool) -> Self {
+    pub fn from_press(is_press: bool) -> Self {
         if is_press {
             Self::Press
         } else {

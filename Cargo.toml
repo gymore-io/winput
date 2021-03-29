@@ -22,12 +22,17 @@ default = ["message_loop"]
 minimal = []
 
 # Enables the `message_loop` module.
-message_loop = []
+message_loop = [
+    "winapi/libloaderapi",
+    "winapi/windef",
+    "winapi/minwindef",
+    "winapi/hidusage"
+]
 
 [dependencies.winapi]
 version = "0.3"
 default-features = false
-features = ["winuser", "errhandlingapi", "winbase", "windef"]
+features = ["winuser", "errhandlingapi", "winbase"]
 
 [badges.maintenance]
 status = "passively-maintained"

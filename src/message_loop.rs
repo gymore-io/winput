@@ -1,9 +1,8 @@
 //! The `message_loop` module provides a way to retreive keyboard and mouse
 //! input messages directly from the system.
 //!
-//! Internally, the [`SetWindowsHookEx`] function is used along with the
-//! [`WH_KEYBOARD_LL`] and [`WH_MOUSE_LL`] events. Everything gets dispatched
-//! by calling [`PeekMessageW`].
+//! Internally, a [message-only window](https://docs.microsoft.com/en-us/windows/win32/winmsg/window-features#message-only-windows)
+//! is created to receive the messages.
 //!
 //! ## Examples
 //!
@@ -30,23 +29,21 @@
 //!     }
 //! }
 //! ```
-//!
-//! [`SetWindowsHookEx`]: https://docs.microsoft.com/en-us/windows/win32/api/winuser/nf-winuser-setwindowshookexw
-//! [`WH_KEYBOARD_LL`]: https://docs.microsoft.com/en-us/windows/win32/winmsg/about-hooks#wh_keyboard_ll
-//! [`WH_MOUSE_LL`]: https://docs.microsoft.com/en-us/windows/win32/winmsg/about-hooks#wh_mouse
-//! [`PeekMessageW`]: https://docs.microsoft.com/en-us/windows/win32/api/winuser/nf-winuser-peekmessagew
 
+use std::ffi::OsStr;
 use std::mem::MaybeUninit;
-use std::ptr;
+use std::os::windows::ffi::OsStrExt;
 use std::sync::atomic::{AtomicU8, Ordering};
 use std::sync::mpsc;
 use std::time::Duration;
+use std::{iter, mem, ptr};
 
-use winapi::um::winuser;
+use winapi::shared::{hidusage, minwindef, windef};
+use winapi::um::{libloaderapi, winuser};
 
 use crate::input::{Action, Button};
 use crate::vk::Vk;
-use crate::WindowsError;
+use crate::{WheelDirection, WindowsError};
 
 /// The current state of the message loop.
 ///
@@ -61,122 +58,228 @@ static STATE: AtomicU8 = AtomicU8::new(0);
 // `SENDER` must only be used on the message loop's thread.
 static mut SENDER: MaybeUninit<mpsc::Sender<Event>> = MaybeUninit::uninit();
 
-/// Callback called by Windows' message loop on the message loop's thread when a
-/// `WM_KEYBOARD_LL` event is received.
-unsafe extern "system" fn low_level_keyboard_proc(
-    code: i32,
-    w_param: usize,
-    l_param: isize,
-) -> isize {
-    if code >= 0 {
-        // SAFETY: The given `l_param` is pointer to a valid `KBDLLHOOKSTRUCT`.
-        let kbd_hook_struct = &*(l_param as *const winuser::KBDLLHOOKSTRUCT);
+/// A buffer that must only be used on the message loop's thread. This buffer must
+/// be properly initialized when the message loop's thread is started.
+static mut BUFFER: MaybeUninit<Vec<u8>> = MaybeUninit::uninit();
 
-        let event = Event::Keyboard {
-            vk: Vk::from_u8(kbd_hook_struct.vkCode as _),
-            scan_code: kbd_hook_struct.scanCode,
-            action: Action::from_release(
-                kbd_hook_struct.flags & winuser::LLKHF_UP == winuser::LLKHF_UP,
-            ),
-        };
-
-        // SAFETY: If this function was called, then the message loop was started
-        // and the `SENDER` is thus initialized.
-        //
-        // `SENDER` must only be used on the message loop's thread. This callback function
-        // is called on this thread.
-        //
-        // For this reason, we do have an exclusive reference to the `gloval_sender` field.
-        (&*SENDER.as_ptr()).send(event).unwrap();
-    }
-
-    winuser::CallNextHookEx(ptr::null_mut(), code, w_param, l_param)
+/// Checks whether `short` contains all the bits of `mask`.
+#[inline]
+fn has_flags(short: u16, mask: u16) -> bool {
+    short & mask == mask
 }
 
-/// Callback called by Windows' message loop on the message loop's thread when a
-/// `WM_MOUSE_LL` event is received.
-unsafe extern "system" fn low_level_mouse_proc(
-    code: i32,
-    w_param: usize,
-    l_param: isize,
-) -> isize {
-    if code >= 0 {
-        // SAFETY: The given `l_param` is pointer to a valid `MSLLHOOKSTRUCT`.
-        let ms_hook_struct = &*(l_param as *const winuser::MSLLHOOKSTRUCT);
+/// A callback function called by the system on the message loop thread.
+unsafe extern "system" fn window_proc(
+    hwnd: windef::HWND,
+    msg: minwindef::UINT,
+    w_param: minwindef::WPARAM,
+    l_param: minwindef::LPARAM,
+) -> minwindef::LRESULT {
+    match msg {
+        // Note: This loop is only here to break from the scope early.
+        winuser::WM_INPUT => loop {
+            // Determine how big should our buffer be.
+            let mut size = 0;
+            let mut result = winuser::GetRawInputData(
+                l_param as winuser::HRAWINPUT,
+                winuser::RID_INPUT,
+                ptr::null_mut(),
+                &mut size,
+                mem::size_of::<winuser::RAWINPUTHEADER>() as _,
+            );
 
-        let event = match w_param as u32 {
-            winuser::WM_LBUTTONDOWN => Event::MouseButton {
-                x: ms_hook_struct.pt.x,
-                y: ms_hook_struct.pt.y,
-                action: Action::Press,
-                button: Button::Left,
-            },
+            if result == -1i32 as u32 {
+                break;
+            }
 
-            winuser::WM_LBUTTONUP => Event::MouseButton {
-                x: ms_hook_struct.pt.x,
-                y: ms_hook_struct.pt.y,
-                action: Action::Release,
-                button: Button::Left,
-            },
+            // SAFETY:
+            // The buffer must be initialized because we are on the message loop's
+            // thread.
+            let buffer = &mut *BUFFER.as_mut_ptr();
+            buffer.clear();
+            buffer.reserve(size as _);
 
-            winuser::WM_RBUTTONDOWN => Event::MouseButton {
-                x: ms_hook_struct.pt.x,
-                y: ms_hook_struct.pt.y,
-                action: Action::Press,
-                button: Button::Right,
-            },
+            // Actually write to the buffer.
+            result = winuser::GetRawInputData(
+                l_param as winuser::HRAWINPUT,
+                winuser::RID_INPUT,
+                buffer.as_mut_ptr() as _,
+                &mut size,
+                mem::size_of::<winuser::RAWINPUTHEADER>() as _,
+            );
 
-            winuser::WM_RBUTTONUP => Event::MouseButton {
-                x: ms_hook_struct.pt.x,
-                y: ms_hook_struct.pt.y,
-                action: Action::Release,
-                button: Button::Right,
-            },
+            if result != size {
+                // We failed to write to the buffer.
+                break;
+            }
 
-            winuser::WM_XBUTTONDOWN => Event::MouseButton {
-                x: ms_hook_struct.pt.x,
-                y: ms_hook_struct.pt.y,
-                action: Action::Press,
-                // Only the high-order word is used to store the button.
-                button: match (ms_hook_struct.mouseData >> 4) as u16 {
-                    winuser::XBUTTON1 => Button::X1,
-                    winuser::XBUTTON2 => Button::X2,
-                    _ => unreachable!("Invalid button: {}", ms_hook_struct.mouseData),
-                },
-            },
+            // SAFETY:
+            // The `GetRawInputData` function did not failed.
+            let raw_input = &*(buffer.as_mut_ptr() as winuser::PRAWINPUT);
 
-            winuser::WM_XBUTTONUP => Event::MouseButton {
-                x: ms_hook_struct.pt.x,
-                y: ms_hook_struct.pt.y,
-                action: Action::Release,
-                // Only the high-order word is used to store the button.
-                button: match (ms_hook_struct.mouseData >> 4) as u16 {
-                    winuser::XBUTTON1 => Button::X1,
-                    winuser::XBUTTON2 => Button::X2,
-                    _ => unreachable!("Invalid button: {}", ms_hook_struct.mouseData),
-                },
-            },
+            // SAFETY:
+            // We are on the message loop's thread, `SENDER` must be initialized.
+            let sender = &mut *SENDER.as_mut_ptr();
 
-            winuser::WM_MOUSEMOVE => Event::MouseMove {
-                x: ms_hook_struct.pt.x,
-                y: ms_hook_struct.pt.y,
-            },
+            match raw_input.header.dwType {
+                winuser::RIM_TYPEMOUSE => {
+                    // Mouse event
+                    let data = raw_input.data.mouse();
 
-            winuser::WM_MOUSEWHEEL => Event::MouseWheel {
-                x: ms_hook_struct.pt.x,
-                y: ms_hook_struct.pt.y,
-                // Only the high-order word is used to store the delta.
-                delta: (ms_hook_struct.mouseData >> 4) as f32 / 120.0,
-            },
+                    if has_flags(data.usFlags, winuser::MOUSE_MOVE_RELATIVE) {
+                        sender
+                            .send(Event::MouseMoveRelative {
+                                x: data.lLastX,
+                                y: data.lLastY,
+                            })
+                            .unwrap();
+                    }
 
-            _ => unreachable!("Invalid message"),
-        };
+                    if has_flags(data.usFlags, winuser::MOUSE_MOVE_ABSOLUTE) {
+                        sender
+                            .send(Event::MouseMoveAbsolute {
+                                x: data.lLastX as f32 / 65535.0,
+                                y: data.lLastY as f32 / 65535.0,
+                                virtual_desk: data.usFlags
+                                    & winuser::MOUSE_VIRTUAL_DESKTOP
+                                    == winuser::MOUSE_VIRTUAL_DESKTOP,
+                            })
+                            .unwrap();
+                    }
 
-        // SAFETY: See `low_level_keyboard_proc`
-        (&*SENDER.as_ptr()).send(event).expect("Channel poisoned");
+                    if has_flags(data.usButtonFlags, winuser::RI_MOUSE_LEFT_BUTTON_DOWN) {
+                        sender
+                            .send(Event::MouseButton {
+                                action: Action::Press,
+                                button: Button::Left,
+                            })
+                            .unwrap();
+                    }
+
+                    if has_flags(data.usButtonFlags, winuser::RI_MOUSE_LEFT_BUTTON_UP) {
+                        sender
+                            .send(Event::MouseButton {
+                                action: Action::Release,
+                                button: Button::Left,
+                            })
+                            .unwrap();
+                    }
+
+                    if has_flags(data.usButtonFlags, winuser::RI_MOUSE_RIGHT_BUTTON_DOWN)
+                    {
+                        sender
+                            .send(Event::MouseButton {
+                                action: Action::Press,
+                                button: Button::Right,
+                            })
+                            .unwrap();
+                    }
+
+                    if has_flags(data.usButtonFlags, winuser::RI_MOUSE_RIGHT_BUTTON_UP) {
+                        sender
+                            .send(Event::MouseButton {
+                                action: Action::Release,
+                                button: Button::Right,
+                            })
+                            .unwrap();
+                    }
+
+                    if has_flags(data.usButtonFlags, winuser::RI_MOUSE_MIDDLE_BUTTON_DOWN)
+                    {
+                        sender
+                            .send(Event::MouseButton {
+                                action: Action::Press,
+                                button: Button::Middle,
+                            })
+                            .unwrap();
+                    }
+
+                    if has_flags(data.usButtonFlags, winuser::RI_MOUSE_MIDDLE_BUTTON_UP) {
+                        sender
+                            .send(Event::MouseButton {
+                                action: Action::Release,
+                                button: Button::Middle,
+                            })
+                            .unwrap();
+                    }
+
+                    if has_flags(data.usButtonFlags, winuser::RI_MOUSE_BUTTON_4_DOWN) {
+                        sender
+                            .send(Event::MouseButton {
+                                action: Action::Press,
+                                button: Button::X1,
+                            })
+                            .unwrap();
+                    }
+
+                    if has_flags(data.usButtonFlags, winuser::RI_MOUSE_BUTTON_4_UP) {
+                        sender
+                            .send(Event::MouseButton {
+                                action: Action::Release,
+                                button: Button::X1,
+                            })
+                            .unwrap();
+                    }
+
+                    if has_flags(data.usButtonFlags, winuser::RI_MOUSE_BUTTON_5_DOWN) {
+                        sender
+                            .send(Event::MouseButton {
+                                action: Action::Press,
+                                button: Button::X2,
+                            })
+                            .unwrap();
+                    }
+
+                    if has_flags(data.usButtonFlags, winuser::RI_MOUSE_BUTTON_5_UP) {
+                        sender
+                            .send(Event::MouseButton {
+                                action: Action::Release,
+                                button: Button::X2,
+                            })
+                            .unwrap();
+                    }
+
+                    if has_flags(data.usButtonFlags, winuser::RI_MOUSE_WHEEL) {
+                        sender
+                            .send(Event::MouseWheel {
+                                delta: data.usButtonData as i16 as f32 / 120.0,
+                                direction: WheelDirection::Vertical,
+                            })
+                            .unwrap();
+                    }
+
+                    if has_flags(data.usButtonFlags, 0x0800) {
+                        sender
+                            .send(Event::MouseWheel {
+                                delta: data.usButtonData as i16 as f32 / 120.0,
+                                direction: WheelDirection::Horizontal,
+                            })
+                            .unwrap();
+                    }
+                }
+                winuser::RIM_TYPEKEYBOARD => {
+                    // Keyboard event
+                    let data = raw_input.data.keyboard();
+
+                    sender
+                        .send(Event::Keyboard {
+                            vk: Vk::from_u8(data.VKey as u8),
+                            scan_code: data.MakeCode as u32,
+                            action: Action::from_press(data.Flags & 1 == 0),
+                        })
+                        .unwrap();
+                }
+                2 => (),
+                _ => unreachable!("Invalid message"),
+            }
+
+            break;
+        },
+
+        _ => (),
     }
 
-    winuser::CallNextHookEx(ptr::null_mut(), code, w_param, l_param)
+    winuser::DefWindowProcW(hwnd, msg, w_param, l_param)
 }
 
 /// An error that can be produced by the [`start`] function.
@@ -189,9 +292,8 @@ pub enum MessageLoopError {
     /// was already active.
     AlreadyActive,
 
-    /// The function failed to install a hook (the keyboard hook or the mouse
-    /// hook).
-    HookInstallation(WindowsError),
+    /// Windows raised an error.
+    OsError(WindowsError),
 }
 
 /// Checks if the message loop is currently active. When this function returns
@@ -224,7 +326,7 @@ pub fn is_active() -> bool {
 /// ```rust, ignore
 /// use winput::message_loop;
 ///
-/// let receiver = message_loop::start();
+/// let receiver = message_loop::start().unwrap();
 ///
 /// loop {
 ///     println!("{:?}", receiver.next_event());
@@ -250,8 +352,11 @@ pub fn start() -> Result<EventReceiver, MessageLoopError> {
     // This channel is used to receive the messages of the message loop.
     let (s, r) = mpsc::channel();
 
-    // We have to initialize `SENDER`.
-    unsafe { SENDER = MaybeUninit::new(s) };
+    // We have to initialize `SENDER` and `BUFFER`.
+    unsafe {
+        SENDER = MaybeUninit::new(s);
+        BUFFER = MaybeUninit::new(Vec::new());
+    }
 
     // This channel is used to retreive a potential error from the message loop's
     // thread.
@@ -259,36 +364,77 @@ pub fn start() -> Result<EventReceiver, MessageLoopError> {
 
     std::thread::spawn(move || {
         unsafe {
-            // Install the hooks
+            // Retreives the module handle of the application.
+            let h_instance = libloaderapi::GetModuleHandleW(ptr::null());
 
-            let keyboard_hook = winuser::SetWindowsHookExW(
-                winuser::WH_KEYBOARD_LL,
-                Some(low_level_keyboard_proc),
-                ptr::null_mut(),
-                0,
-            );
+            // Create the window.
+            let class_name = OsStr::new("winput_message_loop")
+                .encode_wide()
+                .chain(iter::once(0))
+                .collect::<Vec<_>>();
 
-            if keyboard_hook.is_null() {
+            let mut wnd_class: winuser::WNDCLASSW = mem::zeroed();
+            wnd_class.hInstance = h_instance;
+            wnd_class.lpszClassName = class_name.as_ptr();
+            wnd_class.lpfnWndProc = Some(window_proc);
+
+            let class = winuser::RegisterClassW(&wnd_class);
+
+            if class == 0 {
                 error_s
-                    .send(Err(MessageLoopError::HookInstallation(
+                    .send(Err(MessageLoopError::OsError(
                         WindowsError::from_last_error(),
                     )))
                     .unwrap();
                 return;
             }
 
-            let mouse_hook = winuser::SetWindowsHookExW(
-                winuser::WH_MOUSE_LL,
-                Some(low_level_mouse_proc),
-                ptr::null_mut(),
+            let h_wnd = winuser::CreateWindowExW(
                 0,
+                class_name.as_ptr(),
+                class_name.as_ptr(),
+                0,
+                0,
+                0,
+                0,
+                0,
+                winuser::HWND_MESSAGE,
+                ptr::null_mut(),
+                h_instance,
+                ptr::null_mut(),
             );
 
-            if mouse_hook.is_null() {
-                winuser::UnhookWindowsHookEx(keyboard_hook);
-
+            if h_wnd.is_null() {
                 error_s
-                    .send(Err(MessageLoopError::HookInstallation(
+                    .send(Err(MessageLoopError::OsError(
+                        WindowsError::from_last_error(),
+                    )))
+                    .unwrap();
+                return;
+            }
+
+            // Tell the system we want to receive inputs.
+            let mut rid: [winuser::RAWINPUTDEVICE; 2] = mem::zeroed();
+            // Keyboard
+            rid[0].dwFlags = winuser::RIDEV_NOLEGACY | winuser::RIDEV_INPUTSINK;
+            rid[0].usUsagePage = hidusage::HID_USAGE_PAGE_GENERIC;
+            rid[0].usUsage = hidusage::HID_USAGE_GENERIC_KEYBOARD;
+            rid[0].hwndTarget = h_wnd;
+            // Mouse
+            rid[1].dwFlags = winuser::RIDEV_NOLEGACY | winuser::RIDEV_INPUTSINK;
+            rid[1].usUsagePage = hidusage::HID_USAGE_PAGE_GENERIC;
+            rid[1].usUsage = hidusage::HID_USAGE_GENERIC_MOUSE;
+            rid[1].hwndTarget = h_wnd;
+
+            let result = winuser::RegisterRawInputDevices(
+                rid.as_ptr(),
+                rid.len() as _,
+                mem::size_of::<winuser::RAWINPUTDEVICE>() as _,
+            );
+
+            if result == 0 {
+                error_s
+                    .send(Err(MessageLoopError::OsError(
                         WindowsError::from_last_error(),
                     )))
                     .unwrap();
@@ -305,33 +451,26 @@ pub fn start() -> Result<EventReceiver, MessageLoopError> {
             // will be dropped. Using the `error_s` after this will always return an error.
             drop(error_s);
 
-            let mut message = MaybeUninit::uninit();
+            // Start the message loop.
+            let mut msg = mem::zeroed();
             loop {
-                // Events are sent through the channel during the call to
-                // this function.
-                let result = winuser::PeekMessageW(
-                    message.as_mut_ptr(),
-                    ptr::null_mut(),
-                    0,
-                    0,
-                    winuser::PM_REMOVE,
-                );
+                let result = winuser::GetMessageW(&mut msg, h_wnd, 0, 0);
 
-                if result < 0 || STATE.load(Ordering::Acquire) == 3 {
+                if result == -1 {
+                    // An error occured in the message loop.
                     break;
+                } else {
+                    winuser::TranslateMessage(&msg);
+                    winuser::DispatchMessageW(&msg);
                 }
-
-                std::hint::spin_loop();
             }
 
             // The message loop is now exiting.
 
-            // Deinitialize the sender
+            // Deinitialize the sender and the buffer.
+            // TODO: Use `MaybeUninit::assume_init_drop` when stable.
             ptr::drop_in_place(SENDER.as_mut_ptr());
-
-            // Free the installed hooks
-            winuser::UnhookWindowsHookEx(keyboard_hook);
-            winuser::UnhookWindowsHookEx(mouse_hook);
+            ptr::drop_in_place(BUFFER.as_mut_ptr());
 
             // The message loop is now shut down.
             STATE.store(0, Ordering::SeqCst);
@@ -355,7 +494,7 @@ pub enum Event {
         /// The action that was taken on the key.
         action: Action,
     },
-    MouseMove {
+    MouseMoveRelative {
         /// The x coordinate of the mouse, in [per-monitor-aware] screen coordinates.
         ///
         /// [per-monitor-aware]: https://docs.microsoft.com/en-us/windows/desktop/api/shellscalingapi/ne-shellscalingapi-process_dpi_awareness
@@ -365,33 +504,28 @@ pub enum Event {
         /// [per-monitor-aware]: https://docs.microsoft.com/en-us/windows/desktop/api/shellscalingapi/ne-shellscalingapi-process_dpi_awareness
         y: i32,
     },
+    MouseMoveAbsolute {
+        /// The x coordinate of the mouse in screen coordinates.
+        x: f32,
+        /// The y coordinate of the mouse in screen coordinates.
+        y: f32,
+        /// If this flag is set to `true`, the `x` and `y` coordinates map to the entier
+        /// virtual desktop (this is relevent if multiple monitors are used).
+        virtual_desk: bool,
+    },
     MouseButton {
-        /// The x coordinate of the mouse, in [per-monitor-aware] screen coordinates.
-        ///
-        /// [per-monitor-aware]: https://docs.microsoft.com/en-us/windows/desktop/api/shellscalingapi/ne-shellscalingapi-process_dpi_awareness
-        x: i32,
-        /// The y coordinate of the mouse, in [per-monitor-aware] screen coordinates.
-        ///
-        /// [per-monitor-aware]: https://docs.microsoft.com/en-us/windows/desktop/api/shellscalingapi/ne-shellscalingapi-process_dpi_awareness
-        y: i32,
         /// The action that was taken on the mouse button.
         action: Action,
         /// The mouse button involved in the event.
         button: Button,
     },
     MouseWheel {
-        /// The x coordinate of the mouse, in [per-monitor-aware] screen coordinates.
-        ///
-        /// [per-monitor-aware]: https://docs.microsoft.com/en-us/windows/desktop/api/shellscalingapi/ne-shellscalingapi-process_dpi_awareness
-        x: i32,
-        /// The y coordinate of the mouse, in [per-monitor-aware] screen coordinates.
-        ///
-        /// [per-monitor-aware]: https://docs.microsoft.com/en-us/windows/desktop/api/shellscalingapi/ne-shellscalingapi-process_dpi_awareness
-        y: i32,
         /// The amount of rotation of the wheel. Positive values indicate that the wheel
         /// was rotated forward, away from the user; a negative value means that the wheel
         /// was rotated backward, toward the user.
         delta: f32,
+        /// The direction of the wheel.
+        direction: WheelDirection,
     },
 }
 
