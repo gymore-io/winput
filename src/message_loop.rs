@@ -75,7 +75,9 @@ unsafe extern "system" fn low_level_keyboard_proc(
         let event = Event::Keyboard {
             vk: Vk::from_u8(kbd_hook_struct.vkCode as _),
             scan_code: kbd_hook_struct.scanCode,
-            action: Action::from_release(kbd_hook_struct.flags == winuser::LLKHF_UP),
+            action: Action::from_release(
+                kbd_hook_struct.flags & winuser::LLKHF_UP == winuser::LLKHF_UP,
+            ),
         };
 
         // SAFETY: If this function was called, then the message loop was started
