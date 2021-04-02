@@ -1,4 +1,3 @@
-use crate::error::WindowsError;
 use crate::input::{send_inputs, Action, Button, Input};
 use crate::vk::Vk;
 
@@ -61,6 +60,10 @@ impl Keylike for Button {
 
 /// Synthesize an event that presses the key.
 ///
+/// If the function fails to synthesize the input, no error is emited and the
+/// function fails silently. If you wish to retreive an eventual error, use
+/// `send_inputs` instead.
+///
 /// ## Panics
 ///
 /// This function panics if `key` was not a valid key. For example, any `char` that
@@ -72,18 +75,16 @@ impl Keylike for Button {
 /// winput::press('A').unwrap();
 /// ```
 #[inline]
-pub fn press<K: Keylike>(key: K) -> Result<(), WindowsError> {
+pub fn press<K: Keylike>(key: K) {
     let input = key.produce_input(Action::Press);
-    let count = crate::input::send_inputs(&[input]);
-
-    if count == 1 {
-        Ok(())
-    } else {
-        Err(WindowsError::from_last_error())
-    }
+    crate::input::send_inputs(&[input]);
 }
 
 /// Synthesizes an event that releases the key.
+///
+/// If the function fails to synthesize the input, no error is emited and the
+/// function fails silently. If you wish to retreive an eventual error, use
+/// `send_inputs` instead.
 ///
 /// ## Panics
 ///
@@ -96,18 +97,16 @@ pub fn press<K: Keylike>(key: K) -> Result<(), WindowsError> {
 /// winput::release('B').unwrap();
 /// ```
 #[inline(always)]
-pub fn release<K: Keylike>(key: K) -> Result<(), WindowsError> {
+pub fn release<K: Keylike>(key: K) {
     let input = key.produce_input(Action::Release);
-    let count = crate::input::send_inputs(&[input]);
-
-    if count == 1 {
-        Ok(())
-    } else {
-        Err(WindowsError::from_last_error())
-    }
+    crate::input::send_inputs(&[input]);
 }
 
 /// Synthesizes two events. One that presses the key, one that releases the key.
+///
+/// If the function fails to synthesize the input, no error is emited and the
+/// function fails silently. If you wish to retreive an eventual error, use
+/// `send_inputs` instead.
 ///
 /// ## Panics
 ///
@@ -120,19 +119,13 @@ pub fn release<K: Keylike>(key: K) -> Result<(), WindowsError> {
 /// winput::send('C').unwrap();
 /// ```
 #[inline(always)]
-pub fn send<K: Keylike>(key: K) -> Result<(), WindowsError> {
+pub fn send<K: Keylike>(key: K) {
     let inputs = [
         key.produce_input(Action::Press),
         key.produce_input(Action::Release),
     ];
 
-    let count = crate::input::send_inputs(&inputs);
-
-    if count == 0 {
-        Err(WindowsError::from_last_error())
-    } else {
-        Ok(())
-    }
+    crate::input::send_inputs(&inputs);
 }
 
 /// Synthesizes keystrokes according to the given iterator of keys.
