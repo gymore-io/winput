@@ -1,3 +1,4 @@
+use std::error::Error;
 use std::fmt;
 
 /// Represents a Windows error.
@@ -104,3 +105,5 @@ impl fmt::Display for WindowsError {
         }
     }
 }
+
+impl Error for WindowsError {}
