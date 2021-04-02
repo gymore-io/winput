@@ -54,6 +54,10 @@ impl Mouse {
 
     /// Synthesizes a vertical scroll event.
     ///
+    /// If the function fails to synthesize the input, no error is emited and the
+    /// function fails silently. If you wish to retreive an eventual error, use
+    /// `send_inputs` instead.
+    ///
     /// ## Example
     ///
     /// ```rust, ignore
@@ -62,18 +66,16 @@ impl Mouse {
     /// Mouse::scroll(1.0).unwrap();
     /// ```
     #[cfg(not(feature = "minimal"))]
-    pub fn scroll(amount: f32) -> Result<(), WindowsError> {
+    pub fn scroll(amount: f32) {
         let input = Input::from_wheel(amount, WheelDirection::Vertical);
         let count = send_inputs(&[input]);
-
-        if count == 0 {
-            Err(WindowsError::from_last_error())
-        } else {
-            Ok(())
-        }
     }
 
     /// Synthesizes a horizontal scroll event.
+    ///
+    /// If the function fails to synthesize the input, no error is emited and the
+    /// function fails silently. If you wish to retreive an eventual error, use
+    /// `send_inputs` instead.
     ///
     /// ## Example
     ///
@@ -83,18 +85,16 @@ impl Mouse {
     /// Mouse::scrollh(1.0).unwrap();
     /// ```
     #[cfg(not(feature = "minimal"))]
-    pub fn scrollh(amount: f32) -> Result<(), WindowsError> {
+    pub fn scrollh(amount: f32) {
         let input = Input::from_wheel(amount, WheelDirection::Horizontal);
-        let count = send_inputs(&[input]);
-
-        if count == 0 {
-            Err(WindowsError::from_last_error())
-        } else {
-            Ok(())
-        }
+        send_inputs(&[input]);
     }
 
     /// Moves the mouse relatively to its current position, in screen coordinates.
+    ///
+    /// If the function fails to synthesize the input, no error is emited and the
+    /// function fails silently. If you wish to retreive an eventual error, use
+    /// `send_inputs` instead.
     ///
     /// ## Example
     ///
@@ -104,19 +104,17 @@ impl Mouse {
     /// Mouse::move_relative(100, 50).unwrap();
     /// ```
     #[cfg(not(feature = "minimal"))]
-    pub fn move_relative(dx: i32, dy: i32) -> Result<(), WindowsError> {
+    pub fn move_relative(dx: i32, dy: i32) {
         let motion = MouseMotion::Relative { dx, dy };
         let input = Input::from_motion(motion);
-        let count = send_inputs(&[input]);
-
-        if count == 0 {
-            Err(WindowsError::from_last_error())
-        } else {
-            Ok(())
-        }
+        send_inputs(&[input]);
     }
 
     /// Moves the mouse using absolute normalized coordinates.
+    ///
+    /// If the function fails to synthesize the input, no error is emited and the
+    /// function fails silently. If you wish to retreive an eventual error, use
+    /// `send_inputs` instead.
     ///
     /// ## Example
     ///
@@ -127,7 +125,7 @@ impl Mouse {
     /// Mouse::move_absolute(0.5, 0.5).unwrap();
     /// ```
     #[cfg(not(feature = "minimal"))]
-    pub fn move_absolute(x: f32, y: f32) -> Result<(), WindowsError> {
+    pub fn move_absolute(x: f32, y: f32) {
         let motion = MouseMotion::Absolute {
             x,
             y,
@@ -135,12 +133,6 @@ impl Mouse {
         };
 
         let input = Input::from_motion(motion);
-        let count = send_inputs(&[input]);
-
-        if count == 0 {
-            Err(WindowsError::from_last_error())
-        } else {
-            Ok(())
-        }
+        send_inputs(&[input]);
     }
 }
