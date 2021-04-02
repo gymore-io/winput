@@ -24,17 +24,17 @@ The [`Keylike`] structure allows you to synthesize keystrokes on objects that ca
 use winput::{Vk, Button};
 
 // Synthesize keystrokes from a Virtual-Key Code
-winput::press(Vk::Shift).unwrap();    // press the shift key
-winput::send(Vk::A).unwrap();         // press then release the A key
-winput::release(Vk::Shift).unwrap();  // release the shift key
+winput::press(Vk::Shift);    // press the shift key
+winput::send(Vk::A);         // press then release the A key
+winput::release(Vk::Shift);  // release the shift key
 
 // Synthesize keystrokes from characters
-winput::send('F').unwrap();
-winput::send('O').unwrap();
-winput::send('O').unwrap();
+winput::send('F');
+winput::send('O');
+winput::send('O');
 
 // Synthesize keystrokes from mouse buttons
-winput::send(Button::Left).unwrap();
+winput::send(Button::Left);
 
 // You can synthesize keystrokes for the characters of a string
 winput::send_str("Hello, world!");
@@ -46,20 +46,20 @@ The [`Mouse`] structure can be used to manipulate the mouse.
 use winput::Mouse;
 
 // Retrieve the position of the mouse.
-let (x, y) = Mouse::position().unwrap();
+let (x, y) = Mouse::position();
 
 // Set the mouse position
 //  ... in screen coordinates
-Mouse::set_position(10, 10).unwrap();
+Mouse::set_position(10, 10);
 //  ... in normalized absolute coordinates
-Mouse::move_absolute(0.5, 0.5).unwrap();
+Mouse::move_absolute(0.5, 0.5);
 //  ... relatively to the current cursor's position
-Mouse::move_relative(100, 50).unwrap();
+Mouse::move_relative(100, 50);
 
 // Rotate the mouse wheel (vertically)
-Mouse::scroll(1.5).unwrap();
+Mouse::scroll(1.5);
 //  ... or horizontally
-Mouse::scrollh(-1.5).unwrap();
+Mouse::scrollh(-1.5);
 ```
 
 For more complicated input patterns, the [`Input`] structure can be used.

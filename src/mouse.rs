@@ -68,7 +68,7 @@ impl Mouse {
     #[cfg(not(feature = "minimal"))]
     pub fn scroll(amount: f32) {
         let input = Input::from_wheel(amount, WheelDirection::Vertical);
-        let count = send_inputs(&[input]);
+        send_inputs(&[input]);
     }
 
     /// Synthesizes a horizontal scroll event.
