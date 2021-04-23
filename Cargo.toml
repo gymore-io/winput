@@ -29,6 +29,9 @@ message_loop = [
     "winapi/hidusage"
 ]
 
+[dependencies]
+stoppable_thread = "*"
+
 [dependencies.winapi]
 version = "0.3"
 default-features = false
