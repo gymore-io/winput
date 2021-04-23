@@ -362,7 +362,7 @@ pub fn start() -> Result<EventReceiver, MessageLoopError> {
     // thread.
     let (error_s, error_r) = mpsc::channel();
 
-    std::thread::spawn(move || {
+    let thread = stoppable_thread::spawn(move |shouldstop| {
         unsafe {
             // Retreives the module handle of the application.
             let h_instance = libloaderapi::GetModuleHandleW(ptr::null());
@@ -453,7 +453,7 @@ pub fn start() -> Result<EventReceiver, MessageLoopError> {
 
             // Start the message loop.
             let mut msg = mem::zeroed();
-            loop {
+            while !shouldstop.get() {
                 let result = winuser::GetMessageW(&mut msg, h_wnd, 0, 0);
 
                 if result == -1 {
@@ -480,7 +480,7 @@ pub fn start() -> Result<EventReceiver, MessageLoopError> {
     error_r
         .recv()
         .unwrap()
-        .map(|()| EventReceiver { receiver: r })
+        .map(|()| EventReceiver { receiver: r, thread: Some(thread) })
 }
 
 /// An event of any kind.
@@ -541,6 +541,7 @@ pub enum Event {
 /// [`start`]: fn.start.html
 pub struct EventReceiver {
     receiver: mpsc::Receiver<Event>,
+    thread: Option<stoppable_thread::StoppableHandle<()>>
 }
 
 impl EventReceiver {
@@ -550,6 +551,11 @@ impl EventReceiver {
         if is_active() {
             while let Some(_) = self.try_next_event() {}
         }
+    }
+    
+    /// Stop the thread inside of the current reciever
+    pub fn stop(&mut self) {
+        self.thread.take().unwrap().stop().join();
     }
 
     /// Blocks the current thread until an event is received.
