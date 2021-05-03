@@ -453,7 +453,7 @@ pub fn start() -> Result<EventReceiver, MessageLoopError> {
 
             // Start the message loop.
             let mut msg = mem::zeroed();
-            loop {
+            while STATE.load(Ordering::SeqCst) == 2 {
                 let result = winuser::GetMessageW(&mut msg, h_wnd, 0, 0);
 
                 if result == -1 {
