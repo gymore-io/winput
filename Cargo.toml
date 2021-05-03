@@ -1,6 +1,6 @@
 [package]
 name = "winput"
-version = "0.2.3"
+version = "0.2.4"
 authors = ["Gymore <gymore.contact@gmail.com>"]
 edition = "2018"
 description = "A high-level interface to Windows' input system."
