@@ -4,7 +4,8 @@
 ///
 /// [vk_link]: https://docs.microsoft.com/en-us/windows/win32/inputdev/virtual-key-codes
 #[repr(u8)]
-#[derive(Clone, Copy, PartialEq, Eq, Hash, Debug)]
+#[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Debug)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub enum Vk {
     /// Left mouse button
     ///

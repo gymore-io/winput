@@ -1,6 +1,6 @@
 [package]
 name = "winput"
-version = "0.2.4"
+version = "0.2.5"
 authors = ["Gymore <gymore.contact@gmail.com>"]
 edition = "2018"
 description = "A high-level interface to Windows' input system."
@@ -33,6 +33,11 @@ message_loop = [
 version = "0.3"
 default-features = false
 features = ["winuser", "errhandlingapi", "winbase"]
+
+[dependencies.serde]
+version = "1"
+optional = true
+features = [ "derive" ]
 
 [badges.maintenance]
 status = "passively-maintained"

@@ -279,7 +279,7 @@ pub fn send_inputs(inputs: impl AsRef<[Input]>) -> u32 {
 }
 
 /// Represents an action that can be taken on a key or button.
-#[derive(Clone, Copy, PartialEq, Eq, Hash, Debug)]
+#[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Debug)]
 pub enum Action {
     /// The action of pressing the key.
     Press,
@@ -336,7 +336,8 @@ impl Action {
 }
 
 /// A mouse button.
-#[derive(Clone, Copy, PartialEq, Eq, Hash, Debug)]
+#[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Debug)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub enum Button {
     /// The left mouse button.
     Left,
@@ -351,7 +352,8 @@ pub enum Button {
 }
 
 /// Describes a mouse motion.
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Copy, PartialEq, Debug)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub enum MouseMotion {
     /// Describes a relative mouse motion, in pixels.
     ///
@@ -382,7 +384,8 @@ pub enum MouseMotion {
 }
 
 /// Describes the direction of a mouse wheel.
-#[derive(Clone, Copy, PartialEq, Eq, Hash, Debug)]
+#[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Debug)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub enum WheelDirection {
     Vertical,
     Horizontal,
