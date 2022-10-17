@@ -191,8 +191,19 @@ where
 ///
 /// ```rust, ignore
 /// winput::send_str("Hello, world");
+/// winput::send_str("😊");
 /// ```
 #[inline(always)]
 pub fn send_str(s: &str) -> u32 {
-    send_keys(s.chars())
+    let utf16_chars = s
+        .chars()
+        .map(|c| {
+            let mut buf = [0; 4];
+            c.encode_utf16(&mut buf)
+                .iter()
+                .map(|x| unsafe { char::from_u32_unchecked(*x as u32) })
+                .collect::<Vec<_>>()
+        })
+        .flatten();
+    send_keys(utf16_chars)
 }
