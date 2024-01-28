@@ -738,4 +738,39 @@ impl Vk {
         let state = unsafe { GetKeyState(self.into()) } as u16;
         state & MASK == MASK
     }
+
+    /// Is the key extended.
+    /// 
+    /// Windows considers some keys as [extended][1]. Failure to mark them
+    /// as such when sending them will prevent proper processing (e.g., 
+    /// Shift + Arrow might [not extend the selection][2]).
+    /// 
+    /// ## Example
+    /// ```
+    /// use winput::Vk;
+    ///
+    /// assert_eq!(Vk::Z.is_extended(), false);
+    /// assert_eq!(Vk::LeftArrow.is_extended(), true);
+    /// ```
+    /// 
+    /// [1]: https://learn.microsoft.com/en-us/windows/win32/inputdev/about-keyboard-input#extended-key-flag
+    /// [2]: https://stackoverflow.com/questions/71587520/how-to-use-sendinput-to-simulate-the-up-arrow-key-press-or-other-extended-keys
+    pub fn is_extended(self) -> bool {
+        match self {
+            // ALT and CTRL keys on the right-hand side of the keyboard
+            Vk::RightMenu | Vk::RightControl |
+            // ... the INS, DEL, HOME, END, PAGE UP, PAGE DOWN, and arrow keys
+            Vk::Insert | Vk::Delete |
+            Vk::Home | Vk::End |
+            Vk::PageUp | Vk::PageDown |
+            Vk::LeftArrow | Vk::RightArrow | Vk::UpArrow | Vk::DownArrow |
+            // ... NUM LOCK key; the BREAK (CTRL+PAUSE) key; the PRINT SCRN key;
+            Vk::Numlock | Vk::Pause | Vk::PrintScreen |
+            // ... the divide (/) and ENTER keys in the numeric keypad.
+            Vk::Divide
+            
+            => true,
+            _ => false,
+        }
+    }
 }
