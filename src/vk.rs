@@ -767,8 +767,13 @@ impl Vk {
             // ... NUM LOCK key; the BREAK (CTRL+PAUSE) key; the PRINT SCRN key;
             Vk::Numlock | Vk::Pause | Vk::PrintScreen |
             // ... the divide (/) and ENTER keys in the numeric keypad.
-            Vk::Divide
-            
+            Vk::Divide |
+            // Extended keys not explicitly listed in Microsoft's documentation
+            Vk::LeftWin |
+            Vk::BrowserSearch |
+            Vk::VolumeDown | Vk::VolumeUp | Vk::NextTrack | Vk::PrevTrack |
+            Vk::MediaStop | Vk::MediaPlayPause | Vk:: SelectMedia |
+            Vk::StartMail | Vk::Apps | Vk::StartApp1 | Vk::StartApp2
             => true,
             _ => false,
         }
