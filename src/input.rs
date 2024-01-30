@@ -79,6 +79,10 @@ impl Input {
                 Action::Release => winuser::KEYEVENTF_KEYUP,
                 Action::Press => 0,
             };
+            // ensure that extended keys have the extended flag set
+            if vk.is_extended() {
+                ki.dwFlags |= winuser::KEYEVENTF_EXTENDEDKEY;
+            }
             ki.time = 0; // let the system provide a time stamp
 
             Self(input)

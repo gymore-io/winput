@@ -1,10 +1,13 @@
+use strum::IntoEnumIterator;
+use strum::EnumIter;
+
 /// A list of all available *Virtual-Key Codes*.
 ///
 /// The official definition can be found [here][vk_link].
 ///
 /// [vk_link]: https://docs.microsoft.com/en-us/windows/win32/inputdev/virtual-key-codes
 #[repr(u8)]
-#[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Debug)]
+#[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Debug, EnumIter)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub enum Vk {
     /// Left mouse button
@@ -639,6 +642,17 @@ macro_rules! from_vk_for_num {
 
 from_vk_for_num!(u8 u16 u32 u64 u128 i8 i16 i32 i64 i128);
 
+lazy_static! {
+    // An array containing `true` if a given `u8` value is a valid
+    // Virtual Key code. The array is initialized only once and is
+    // accessible as a static in this module.
+    static ref VALID_VK: [bool; 256] = {
+        let mut is_valid_vk = [false; 256];
+        Vk::iter().for_each(|vk| is_valid_vk[vk as usize] = true);
+        is_valid_vk
+    };
+}
+
 impl Vk {
     /// Creates a Virtual-Key Code from the given `u8`.
     ///
@@ -675,6 +689,26 @@ impl Vk {
         std::mem::transmute(n)
     }
 
+    /// Creates a Virtual-Key Code from the given `u8` in a safe manner. Returns
+    /// `None` if there is no virtual key associated with the code.
+    ///
+    /// ## Example
+    /// ```
+    /// use winput::Vk;
+    /// 
+    /// assert_eq!(Vk::from_u8_safe(0), None);
+    /// assert_eq!(Vk::from_u8_safe(1), Some(Vk::MouseLeft));
+    /// assert_eq!(Vk::from_u8_safe(Vk::LeftWin.into()), Some(Vk::LeftWin));
+    /// assert_eq!(Vk::from_u8_safe(255), None);
+    /// ```
+    #[inline(always)]
+    pub fn from_u8_safe(n: u8) -> Option<Self> {
+        match Self::is_valid(n) {
+            true => Some(unsafe { Self::from_u8(n) }),
+            false => None,
+        }
+    }
+
     /// Converts this Virtual-Key Code into a `u8`.
     ///
     /// ## Example
@@ -703,15 +737,15 @@ impl Vk {
     ///     println!("The Z key is not down :(");
     /// }
     /// ```
-    pub fn is_down(self) -> bool {
-        use winapi::um::winuser::GetAsyncKeyState;
+    // pub fn is_down(self) -> bool {
+    //     use winapi::um::winuser::GetAsyncKeyState;
 
-        const MASK: u16 = 0x8000;
+    //     const MASK: u16 = 0x8000;
 
-        // Calling C code
-        let state = unsafe { GetAsyncKeyState(self.into()) } as u16;
-        state & MASK == MASK
-    }
+    //     // Calling C code
+    //     let state = unsafe { GetAsyncKeyState(self.into()) } as u16;
+    //     state & MASK == MASK
+    // }
 
     /// Checks if the given key is currently toggled.
     ///
@@ -729,13 +763,69 @@ impl Vk {
     ///     println!("I knew it! No one ever uses this key!");
     /// }
     /// ```
-    pub fn is_toggled(self) -> bool {
-        use winapi::um::winuser::GetKeyState;
+    // pub fn is_toggled(self) -> bool {
+    //     use winapi::um::winuser::GetKeyState;
 
-        const MASK: u16 = 0x0001;
+    //     const MASK: u16 = 0x0001;
 
-        // Calling C code
-        let state = unsafe { GetKeyState(self.into()) } as u16;
-        state & MASK == MASK
+    //     // Calling C code
+    //     let state = unsafe { GetKeyState(self.into()) } as u16;
+    //     state & MASK == MASK
+    // }
+
+    /// Is the key extended.
+    /// 
+    /// Windows considers some keys as [extended][1]. Failure to mark them
+    /// as such when sending them will prevent proper processing (e.g., 
+    /// Shift + Arrow might [not extend the selection][2]).
+    /// 
+    /// ## Example
+    /// ```
+    /// use winput::Vk;
+    ///
+    /// assert_eq!(Vk::Z.is_extended(), false);
+    /// assert_eq!(Vk::LeftArrow.is_extended(), true);
+    /// ```
+    /// 
+    /// [1]: https://learn.microsoft.com/en-us/windows/win32/inputdev/about-keyboard-input#extended-key-flag
+    /// [2]: https://stackoverflow.com/questions/71587520/how-to-use-sendinput-to-simulate-the-up-arrow-key-press-or-other-extended-keys
+    pub fn is_extended(self) -> bool {
+        match self {
+            // ALT and CTRL keys on the right-hand side of the keyboard
+            Vk::RightMenu | Vk::RightControl |
+            // ... the INS, DEL, HOME, END, PAGE UP, PAGE DOWN, and arrow keys
+            Vk::Insert | Vk::Delete |
+            Vk::Home | Vk::End |
+            Vk::PageUp | Vk::PageDown |
+            Vk::LeftArrow | Vk::RightArrow | Vk::UpArrow | Vk::DownArrow |
+            // ... NUM LOCK key; the BREAK (CTRL+PAUSE) key; the PRINT SCRN key;
+            Vk::Numlock | Vk::Pause | Vk::PrintScreen |
+            // ... the divide (/) and ENTER keys in the numeric keypad.
+            Vk::Divide |
+            // Extended keys not explicitly listed in Microsoft's documentation
+            Vk::LeftWin |
+            Vk::BrowserSearch |
+            Vk::VolumeDown | Vk::VolumeUp | Vk::NextTrack | Vk::PrevTrack |
+            Vk::MediaStop | Vk::MediaPlayPause | Vk:: SelectMedia |
+            Vk::StartMail | Vk::Apps | Vk::StartApp1 | Vk::StartApp2
+            => true,
+            _ => false,
+        }
+    }
+
+    /// Checks if a given code is a valid virtual key.
+    /// 
+    /// ## Example
+    /// 
+    /// ```
+    /// use winput::Vk;
+    /// 
+    /// assert_eq!(Vk::is_valid(0), false);
+    /// assert_eq!(Vk::is_valid(1), true);
+    /// assert_eq!(Vk::is_valid(0xF5), false);
+    /// assert_eq!(Vk::is_valid(255), false);
+    /// ```
+    pub fn is_valid(n: u8) -> bool {
+        VALID_VK[n as usize]
     }
 }
